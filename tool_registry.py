@@ -172,18 +172,18 @@ async def execute_tool(tool_id: str, input_data: Dict[str, Any], session) -> Dic
             logger.warning(f"Tool not found for execution with id: {tool_id}")
             raise HTTPException(status_code=404, detail="Tool not found")
 
-    @app.get("/")
-    async def root():
-        """Root endpoint."""
-        return {"message": "Welcome to the Tool Management API"}
+@app.get("/")
+async def root():
+    """Root endpoint."""
+    return {"message": "Welcome to the Tool Management API"}
 
-    @app.get("/health")
-    async def health_check():
-        """Health check endpoint."""
-        return {"status": "healthy"}
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy"}
 
-    @app.post("/tools", response_model=ToolResponse)
-    async def create_tool(tool: Tool, session=Depends(get_session)):
+@app.post("/tools", response_model=ToolResponse)
+async def create_tool(tool: Tool, session=Depends(get_session)):
         logger.info(f"Creating new tool: {tool.name}")
         result = await session.run(
             """
@@ -217,8 +217,8 @@ async def execute_tool(tool_id: str, input_data: Dict[str, Any], session) -> Dic
             logger.error(f"Failed to create tool: {tool.name}")
             raise HTTPException(status_code=500, detail="Failed to create tool")
 
-    @app.get("/tools", response_model=List[ToolResponse])
-    async def get_tools(session=Depends(get_session)):
+@app.get("/tools", response_model=List[ToolResponse])
+async def get_tools(session=Depends(get_session)):
         logger.info("Fetching all tools")
         result = await session.run(
             """
@@ -242,8 +242,8 @@ async def execute_tool(tool_id: str, input_data: Dict[str, Any], session) -> Dic
         logger.info(f"Fetched {len(tools)} tools")
         return tools
 
-    @app.get("/tools/{tool_id}", response_model=ToolResponse)
-    async def get_tool(tool_id: str, session=Depends(get_session)):
+@app.get("/tools/{tool_id}", response_model=ToolResponse)
+async def get_tool(tool_id: str, session=Depends(get_session)):
         logger.info(f"Fetching tool with id: {tool_id}")
         result = await session.run(
             """
@@ -269,8 +269,8 @@ async def execute_tool(tool_id: str, input_data: Dict[str, Any], session) -> Dic
             logger.warning(f"Tool not found with id: {tool_id}")
             raise HTTPException(status_code=404, detail="Tool not found")
 
-    @app.put("/tools/{tool_id}", response_model=ToolResponse)
-    async def update_tool(tool_id: str, tool: Tool, session=Depends(get_session)):
+@app.put("/tools/{tool_id}", response_model=ToolResponse)
+async def update_tool(tool_id: str, tool: Tool, session=Depends(get_session)):
         logger.info(f"Updating tool with id: {tool_id}")
         result = await session.run(
             """
@@ -309,8 +309,8 @@ async def execute_tool(tool_id: str, input_data: Dict[str, Any], session) -> Dic
             logger.warning(f"Tool not found for update with id: {tool_id}")
             raise HTTPException(status_code=404, detail="Tool not found")
 
-    @app.delete("/tools/{tool_id}")
-    async def delete_tool(tool_id: str, session=Depends(get_session)):
+@app.delete("/tools/{tool_id}")
+async def delete_tool(tool_id: str, session=Depends(get_session)):
         logger.info(f"Deleting tool with id: {tool_id}")
         result = await session.run(
             """
@@ -328,8 +328,8 @@ async def execute_tool(tool_id: str, input_data: Dict[str, Any], session) -> Dic
             logger.warning(f"Tool not found for deletion with id: {tool_id}")
             raise HTTPException(status_code=404, detail="Tool not found")
 
-    @app.post("/execute_tool", response_model=ToolExecutionResponse)
-    async def execute_single_tool(request: ToolExecutionRequest, session=Depends(get_session)):
+@app.post("/execute_tool", response_model=ToolExecutionResponse)
+async def execute_single_tool(request: ToolExecutionRequest, session=Depends(get_session)):
         logger.info(f"Received request to execute tool: {request.tool_id}")
         logger.debug(f"Input data: {request.input_data}")
         try:
@@ -342,8 +342,8 @@ async def execute_tool(tool_id: str, input_data: Dict[str, Any], session) -> Dic
             logger.error(f"Unexpected error while executing tool {request.tool_id}: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
-    @app.post("/execute_tools_sequential", response_model=List[ToolExecutionResponse])
-    async def execute_tools_sequential(request: SequentialToolExecutionRequest, session=Depends(get_session)):
+@app.post("/execute_tools_sequential", response_model=List[ToolExecutionResponse])
+async def execute_tools_sequential(request: SequentialToolExecutionRequest, session=Depends(get_session)):
         logger.info(f"Executing tools sequentially: {request.tool_ids}")
         current_input = request.initial_input
         results = []
@@ -362,8 +362,8 @@ async def execute_tool(tool_id: str, input_data: Dict[str, Any], session) -> Dic
 
         return results
 
-    @app.post("/execute_tools_parallel", response_model=List[ToolExecutionResponse])
-    async def execute_tools_parallel(request: ParallelToolExecutionRequest, session=Depends(get_session)):
+@app.post("/execute_tools_parallel", response_model=List[ToolExecutionResponse])
+async def execute_tools_parallel(request: ParallelToolExecutionRequest, session=Depends(get_session)):
         logger.info(f"Executing tools in parallel: {request.tool_ids}")
         tasks = []
         for tool_id in request.tool_ids:
