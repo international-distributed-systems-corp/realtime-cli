@@ -315,17 +315,23 @@ async def conversation_loop(ws):
 
     # Start continuous recording right away
     STATE.audio.is_recording = True
-    record_task = asyncio.create_task(start_recording(ws))
+    STATE.audio.queue = Queue()
+    STATE.record_task = asyncio.create_task(start_recording(ws))
     
     try:
         # Keep the conversation going until interrupted
         while True:
             await asyncio.sleep(0.1)
             
+            # Check if recording task needs to be restarted
+            if STATE.audio.is_recording and (not hasattr(STATE, 'record_task') or STATE.record_task.done()):
+                STATE.record_task = asyncio.create_task(start_recording(ws))
+            
     except asyncio.CancelledError:
         print("\nEnding conversation...")
         STATE.audio.is_recording = False
-        await record_task
+        if hasattr(STATE, 'record_task'):
+            await STATE.record_task
 
 
 async def handle_server_events(ws):
@@ -378,20 +384,24 @@ async def handle_server_events(ws):
                         STATE.current_response_id = None
                         STATE.response_state = ResponseState.IDLE
                         print("\nReady for input...")  # Visual indicator
+                        
                         # Wait for audio playback to finish and levels to drop
                         if STATE.audio.player:
-                            while STATE.audio.visualizer.output_level > 0.05:
-                                await asyncio.sleep(0.1)
-                            await asyncio.sleep(0.3)  # Additional cooldown
-                            STATE.audio.player.stop()
-                            STATE.audio.player = None
-                        # Resume recording
+                            try:
+                                while STATE.audio.visualizer.output_level > 0.05:
+                                    await asyncio.sleep(0.1)
+                                await asyncio.sleep(0.3)  # Additional cooldown
+                            finally:
+                                STATE.audio.player.stop()
+                                STATE.audio.player = None
+                        
+                        # Ensure clean state for next recording
                         STATE.audio.is_recording = True
-                        # Ensure recording actually starts
-                        if not hasattr(STATE.audio, 'queue'):
-                            STATE.audio.queue = Queue()
-                        if not STATE.audio.queue:
-                            STATE.audio.queue = Queue()
+                        STATE.audio.queue = Queue()
+                        
+                        # Restart recording if needed
+                        if not hasattr(STATE, 'record_task') or STATE.record_task.done():
+                            STATE.record_task = asyncio.create_task(start_recording(ws))
                         
                 elif event_type == "input_audio_buffer.speech_started":
                     STATE.response_state = ResponseState.PROCESSING
