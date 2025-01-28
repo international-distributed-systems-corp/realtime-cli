@@ -133,7 +133,7 @@ class RealtimeRelay:
 # Relay server: local <-> Realtime
 ################################################################################
 
-async def handle_client(client_ws):
+async def handle_client(client_ws, tool_registry=None):
     """
     Handles a single local client that connects to the relay server.
     1. Expects first message to contain the desired session config (JSON).
@@ -357,7 +357,12 @@ async def main():
 ╚═════╝░░░░╚═╝░░░╚═════╝░░░░╚═╝░░░╚══════╝╚═╝░░░░░╚═╝╚═════╝░""")
     print("\n")
     print(f"Relay server started on ws://localhost:{LOCAL_SERVER_PORT}")
-    async with websockets.serve(handle_client, "localhost", LOCAL_SERVER_PORT, compression=None):
+    async with websockets.serve(
+        lambda ws: handle_client(ws, tool_registry), 
+        "localhost", 
+        LOCAL_SERVER_PORT, 
+        compression=None
+    ):
         await asyncio.Future()  # run forever
 
 if __name__ == "__main__":
