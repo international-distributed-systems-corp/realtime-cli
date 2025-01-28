@@ -295,7 +295,7 @@ async def handle_client(client_ws):
                     
             except websockets.ConnectionClosed:
                 print("WebSocket connection closed")
-                break
+                return
             except Exception as e:
                 error_event = {
                     "event_id": f"evt_{uuid.uuid4().hex[:6]}",
@@ -311,7 +311,7 @@ async def handle_client(client_ws):
                     await client_ws.send(json.dumps(error_event))
                 except Exception as send_error:
                     print(f"Failed to send error event: {send_error}")
-                break
+                return
 
         done, pending = await asyncio.wait(
             [asyncio.create_task(relay_local_to_upstream()),
