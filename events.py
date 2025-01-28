@@ -16,33 +16,59 @@ logger = logging.getLogger(__name__)
 
 class EventType(Enum):
     """All supported event types from the Realtime API"""
+    # Error events
     ERROR = "error"
+    
+    # Session events
     SESSION_CREATED = "session.created"
     SESSION_UPDATED = "session.updated"
+    
+    # Conversation events
     CONVERSATION_CREATED = "conversation.created"
     CONVERSATION_ITEM_CREATED = "conversation.item.created"
+    CONVERSATION_ITEM_TRUNCATED = "conversation.item.truncated"
+    CONVERSATION_ITEM_DELETED = "conversation.item.deleted"
+    
+    # Audio transcription events
     AUDIO_TRANSCRIPTION_COMPLETED = "conversation.item.input_audio_transcription.completed"
     AUDIO_TRANSCRIPTION_FAILED = "conversation.item.input_audio_transcription.failed"
-    ITEM_TRUNCATED = "conversation.item.truncated"
-    ITEM_DELETED = "conversation.item.deleted"
+    
+    # Audio buffer events
     AUDIO_BUFFER_COMMITTED = "input_audio_buffer.committed"
     AUDIO_BUFFER_CLEARED = "input_audio_buffer.cleared"
     SPEECH_STARTED = "input_audio_buffer.speech_started"
     SPEECH_STOPPED = "input_audio_buffer.speech_stopped"
+    
+    # Response events
     RESPONSE_CREATED = "response.created"
     RESPONSE_DONE = "response.done"
+    RESPONSE_CANCELLED = "response.cancelled"
+    
+    # Response item events
     OUTPUT_ITEM_ADDED = "response.output_item.added"
     OUTPUT_ITEM_DONE = "response.output_item.done"
+    
+    # Content events
     CONTENT_PART_ADDED = "response.content_part.added"
     CONTENT_PART_DONE = "response.content_part.done"
+    
+    # Text events
     TEXT_DELTA = "response.text.delta"
     TEXT_DONE = "response.text.done"
+    
+    # Audio transcript events
     AUDIO_TRANSCRIPT_DELTA = "response.audio_transcript.delta"
     AUDIO_TRANSCRIPT_DONE = "response.audio_transcript.done"
+    
+    # Audio events
     AUDIO_DELTA = "response.audio.delta"
     AUDIO_DONE = "response.audio.done"
+    
+    # Function call events
     FUNCTION_CALL_DELTA = "response.function_call_arguments.delta"
     FUNCTION_CALL_DONE = "response.function_call_arguments.done"
+    
+    # Rate limit events
     RATE_LIMITS_UPDATED = "rate_limits.updated"
 
 @dataclass

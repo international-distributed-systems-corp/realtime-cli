@@ -45,6 +45,21 @@ class SessionState:
     current_response_id: Optional[str] = None
     rate_limits: Dict[str, Dict[str, int]] = field(default_factory=dict)
     
+    # Track all events
+    events_received: List[Dict[str, Any]] = field(default_factory=list)
+    events_sent: List[Dict[str, Any]] = field(default_factory=list)
+    
+    # Track specific event counts
+    event_counts: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    
+    # Track timing information
+    last_event_time: Optional[float] = None
+    session_start_time: Optional[float] = None
+    
+    # Track rate limits
+    token_usage: Dict[str, int] = field(default_factory=lambda: {"total": 0, "input": 0, "output": 0})
+    request_count: int = 0
+    
     def reset(self) -> None:
         """Reset the session state"""
         self.audio = AudioState()

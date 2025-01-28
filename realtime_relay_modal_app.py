@@ -117,18 +117,66 @@ async def handle_client(websocket: WebSocket, relay: Optional[RealtimeRelay] = N
     try:
         async def relay_local_to_upstream():
             while True:
-                data_str = await websocket.receive_text()
-                data = json.loads(data_str)
-                if "event_id" not in data:
-                    data["event_id"] = f"evt_{uuid.uuid4().hex[:6]}"
-                await relay.upstream_ws.send(json.dumps(data))
+                try:
+                    data_str = await websocket.receive_text()
+                    data = json.loads(data_str)
+                    
+                    # Add event ID if missing
+                    if "event_id" not in data:
+                        data["event_id"] = f"evt_{uuid.uuid4().hex[:6]}"
+                    
+                    # Track event
+                    relay.state.events_sent.append({
+                        "timestamp": time.time(),
+                        "event": data
+                    })
+                    relay.state.event_counts[data.get("type", "unknown")] += 1
+                    
+                    # Send to upstream
+                    await relay.upstream_ws.send(json.dumps(data))
+                    
+                except json.JSONDecodeError:
+                    logger.error("Invalid JSON received from client")
+                except Exception as e:
+                    logger.error(f"Error in local->upstream relay: {e}")
 
         async def relay_upstream_to_local():
             try:
                 async for data_str in relay.upstream_ws:
-                    await websocket.send_text(data_str)
+                    try:
+                        # Parse and track event
+                        data = json.loads(data_str)
+                        relay.state.events_received.append({
+                            "timestamp": time.time(),
+                            "event": data
+                        })
+                        relay.state.event_counts[data.get("type", "unknown")] += 1
+                        
+                        # Track rate limits
+                        if data.get("type") == "rate_limits.updated":
+                            relay.state.rate_limits = {
+                                limit["name"]: limit 
+                                for limit in data.get("rate_limits", [])
+                            }
+                        
+                        # Track token usage
+                        if data.get("type") == "response.done":
+                            usage = data.get("response", {}).get("usage", {})
+                            if usage:
+                                relay.state.token_usage["total"] += usage.get("total_tokens", 0)
+                                relay.state.token_usage["input"] += usage.get("input_tokens", 0)
+                                relay.state.token_usage["output"] += usage.get("output_tokens", 0)
+                        
+                        # Send to client
+                        await websocket.send_text(data_str)
+                        
+                    except json.JSONDecodeError:
+                        logger.error("Invalid JSON received from upstream")
+                    except Exception as e:
+                        logger.error(f"Error processing upstream event: {e}")
+                        
             except websockets.ConnectionClosed:
-                pass
+                logger.info("Upstream connection closed")
 
         done, pending = await asyncio.wait(
             [asyncio.create_task(relay_local_to_upstream()),
