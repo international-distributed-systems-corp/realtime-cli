@@ -36,6 +36,11 @@ class ConversationDisplay:
         """Update the output audio level"""
         self.output_level = min(1.0, max(0.0, level))
         
+    def update_vad_indicator(self, is_voice: bool) -> None:
+        """Update the voice activity detection indicator"""
+        self._vad_active = is_voice
+        self.render()
+        
     def set_status(self, message: str) -> None:
         """Update the status message"""
         self.status_message = message
