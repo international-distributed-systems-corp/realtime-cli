@@ -10,12 +10,17 @@ NEO4J_SECRET_NAME = "distributed-systems"
 image = (
     Image.debian_slim()
     .pip_install([
-        "fastapi",
-        "uvicorn", 
-        "pydantic",
-        "neo4j",
-        "python-dotenv"
+        "fastapi>=0.68.0",
+        "uvicorn>=0.15.0", 
+        "pydantic>=1.8.0",
+        "neo4j>=5.0.0",
+        "python-dotenv>=0.19.0"
     ])
+    .env({
+        "NEO4J_URI": "neo4j://bolt.n4j.distributed.systems",
+        "NEO4J_USER": "neo4j",
+        "NEO4J_PASSWORD": "Backstab2025!"
+    })
 )
 
 # Create Modal app
