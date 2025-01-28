@@ -5,7 +5,7 @@ import uuid
 import os
 import websockets
 import requests
-from db.database import init_db, get_user_by_api_key, record_usage
+from db import init_db, get_user_by_api_key, record_usage
 from datetime import datetime
 from modal import Image, App, asgi_app
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
