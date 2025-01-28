@@ -125,7 +125,6 @@ async def get_db():
     """Dependency to get database session."""
     db = Neo4jConnection()
     try:
-        await db.connect()
         yield db
     finally:
         await db.close()
