@@ -30,5 +30,5 @@ from tool_registry import web_app
     secrets=[Secret.from_name(NEO4J_SECRET_NAME)],
 )
 @asgi_app()
-def app():
-    return app
+def fastapi_app():
+    return web_app
