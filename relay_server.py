@@ -11,7 +11,7 @@ from datetime import datetime
 
 # Configure minimal logging
 logging.basicConfig(
-    level=logging.WARNING,
+    level=logging.ERROR,
     format='%(levelname)s: %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -59,11 +59,10 @@ async def initialize_tool_registry():
     try:
         # Create client instance
         tool_registry = ToolRegistryClient(base_url=TOOL_REGISTRY_URL)
-        print("Tool Registry client initialized successfully")
+        logger.debug("Tool Registry client initialized")
         return tool_registry
     except Exception as e:
-        print(f"Warning: Failed to initialize Tool Registry client: {e}")
-        print("Continuing without tool support...")
+        logger.warning(f"Failed to initialize Tool Registry client: {e}")
         return None
 
 def create_ephemeral_token(session_config: dict) -> str:
@@ -143,9 +142,7 @@ class RealtimeRelay:
             "OpenAI-Beta": "realtime=v1"
         }
 
-        print(f"Connecting upstream to {base_url} ...")
         self.upstream_ws = await websockets.connect(base_url, additional_headers=headers)
-        print("Upstream connected.")
 
     async def close(self):
         if self.upstream_ws:
@@ -167,11 +164,9 @@ async def handle_client(client_ws, tool_registry=None):
     """
     relay = None
     try:
-        print("New client connected, waiting for init message...")
         # Step 1: Wait for session init from local with timeout
         try:
             init_msg_str = await asyncio.wait_for(client_ws.recv(), timeout=5.0)
-            print(f"Received init message: {init_msg_str[:100]}...")
         except asyncio.TimeoutError:
             print("Timeout waiting for init message")
             return
@@ -240,8 +235,6 @@ async def handle_client(client_ws, tool_registry=None):
                     if "event_id" not in data:
                         data["event_id"] = f"evt_{uuid.uuid4().hex[:6]}"
                     
-                    # Log client -> server event
-                    logger.info(f"Client -> Server | Event: {data['type']} | ID: {data['event_id']}")
                         
                     # Add timeout to upstream send
                     await asyncio.wait_for(relay.upstream_ws.send(json.dumps(data)), timeout=2.0)
@@ -298,8 +291,6 @@ async def handle_client(client_ws, tool_registry=None):
                 async for data_str in relay.upstream_ws:
                     data = json.loads(data_str)
                     
-                    # Log server -> client event
-                    logger.info(f"Server -> Client | Event: {data.get('type')} | ID: {data.get('event_id', 'N/A')}")
                     
                     # Track rate limits
                     if data.get("type") == "rate_limits.updated":
@@ -307,12 +298,11 @@ async def handle_client(client_ws, tool_registry=None):
                         
                     # Handle session creation
                     elif data.get("type") == "session.created":
-                        print(f"Session created with config: {data.get('session', {})}")
                         
                     # Handle errors
                     elif data.get("type") == "error":
                         error_msg = data.get('error', {}).get('message', 'Unknown error')
-                        print(f"Error from OpenAI: {error_msg}")
+                        logger.error(f"OpenAI API error: {error_msg}")
                         # Ensure proper error response format
                         error_response = {
                             "event_id": f"evt_{uuid.uuid4().hex[:6]}",
@@ -328,7 +318,7 @@ async def handle_client(client_ws, tool_registry=None):
                         await client_ws.send(data_str)
                     
             except websockets.ConnectionClosed:
-                print("WebSocket connection closed")
+                logger.debug("WebSocket connection closed")
                 return
             except Exception as e:
                 error_event = {
@@ -359,7 +349,7 @@ async def handle_client(client_ws, tool_registry=None):
     except (asyncio.CancelledError, websockets.ConnectionClosed):
         pass
     except Exception as e:
-        print(f"[Server Error] {e}")
+        logger.error(f"Server error: {e}")
         # Attempt to inform the client
         err_evt = {
             "type": "server_relay_error",
