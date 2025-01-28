@@ -395,8 +395,8 @@ async def handle_server_events(ws):
                     STATE.response_state = ResponseState.PROCESSING
                     STATE.audio.display.start_user_speech()
                     
-                    # Cancel any ongoing response
-                    if STATE.current_response_id:
+                    # Only attempt cancellation if there's an active response
+                    if STATE.current_response_id and STATE.response_state == ResponseState.RESPONDING:
                         cancel_event = {
                             "event_id": f"evt_{uuid.uuid4().hex[:6]}",
                             "type": "response.cancel",
@@ -404,6 +404,7 @@ async def handle_server_events(ws):
                         }
                         await ws.send(json.dumps(cancel_event))
                         STATE.current_response_id = None
+                        STATE.response_state = ResponseState.IDLE
                         
                     # Stop any ongoing playback
                     if STATE.audio.player:
