@@ -257,6 +257,11 @@ CHANNELS = 1
 RATE = 24000  # Native rate for OpenAI
 TARGET_RATE = 24000  # OpenAI requires 24kHz
 
+# Voice Activity Detection settings
+VAD_THRESHOLD = 0.02  # Initial VAD threshold
+VAD_ADJUSTMENT = 0.8  # Scale factor for input sensitivity
+BACKGROUND_LEARNING_RATE = 0.01  # Rate to learn background noise level
+
 def resample_audio(audio_data, from_rate, to_rate):
     """Resample audio data between different sample rates"""
     audio_array = numpy.frombuffer(audio_data, dtype=numpy.int16)
@@ -266,15 +271,43 @@ def resample_audio(audio_data, from_rate, to_rate):
 def audio_callback(in_data, frame_count, time_info, status):
     """Callback for audio recording"""
     if STATE.audio.is_recording:
-        # Always queue the audio data for sending
+        # Convert input to numpy array for processing
+        audio_data = numpy.frombuffer(in_data, dtype=numpy.float32)
+        
+        # Calculate audio level
+        audio_level = numpy.abs(audio_data).mean()
+        
+        # Update background noise level
+        if not hasattr(STATE.audio, 'background_level'):
+            STATE.audio.background_level = audio_level
+        else:
+            STATE.audio.background_level = (
+                (1 - BACKGROUND_LEARNING_RATE) * STATE.audio.background_level +
+                BACKGROUND_LEARNING_RATE * audio_level
+            )
+        
+        # Detect voice activity
+        is_voice = audio_level > (STATE.audio.background_level * VAD_THRESHOLD)
+        
+        # If playing audio, mute the input
+        if getattr(STATE.audio, 'is_playing', False):
+            # Generate silence instead of recording
+            audio_data = numpy.zeros_like(audio_data)
+            is_voice = False
+        else:
+            # Apply input sensitivity adjustment
+            audio_data = audio_data * VAD_ADJUSTMENT
+        
+        # Update VAD indicator
+        STATE.audio.display.update_vad_indicator(is_voice)
+        
+        # Queue the processed audio
         if not hasattr(STATE.audio, 'queue'):
             STATE.audio.queue = Queue()
-        STATE.audio.queue.put(in_data)
+        STATE.audio.queue.put(audio_data.tobytes())
         
-        # Basic visualization only
+        # Update visualization
         if frame_count % 2 == 0:
-            audio_data = numpy.frombuffer(in_data, dtype=numpy.int16)
-            audio_level = numpy.abs(audio_data).mean() / 32768.0
             STATE.audio.display.update_input_level(audio_level)
             STATE.audio.display.render()
             
@@ -386,8 +419,8 @@ async def handle_server_events(ws):
                         if STATE.audio.player is None:
                             STATE.audio.player = AudioPlayer()
                             STATE.audio.player.start()
-                            # Ensure we're not recording while playing
-                            STATE.audio.is_recording = False
+                            # Mark as playing but keep recording (will be muted)
+                            STATE.audio.is_playing = True
                         # Update display and visualizer with output audio level
                         STATE.audio.visualizer.update_output_level(audio_data)
                         STATE.audio.display.update_output_level(STATE.audio.visualizer.output_level)
@@ -409,9 +442,9 @@ async def handle_server_events(ws):
                             finally:
                                 STATE.audio.player.stop()
                                 STATE.audio.player = None
+                                STATE.audio.is_playing = False
                         
-                        # Ensure clean state for next recording
-                        STATE.audio.is_recording = True
+                        # Reset recording state
                         STATE.audio.queue = Queue()
                         
                         # Restart recording if needed
