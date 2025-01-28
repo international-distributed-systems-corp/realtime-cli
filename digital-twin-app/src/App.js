@@ -1,4 +1,4 @@
-import DigitalTwinInterface from './components/DigitalTwinInterface';
+import DigitalTwinInterface from './components/DigitalTwinInterface.jsx';
 
 function App() {
   return (
