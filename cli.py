@@ -16,7 +16,7 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 from queue import Queue, Empty
 
-from visualizer import AudioVisualizer
+from conversation_display import ConversationDisplay
 from conversation import ConversationManager
 
 from utils import (
@@ -209,7 +209,7 @@ RATE = 24000  # OpenAI requires 24kHz sample rate for PCM16
 STATE = SessionState()
 STATE.audio.queue = Queue()  # Initialize audio queue
 STATE.audio.player = None  # Initialize player attribute
-STATE.audio.visualizer = AudioVisualizer()  # Add visualizer
+STATE.audio.display = ConversationDisplay()  # Add display
 STATE.conversation = ConversationManager()  # Add conversation manager
 
 # Enhanced session config
@@ -241,25 +241,23 @@ RATE = 24000  # OpenAI requires 24kHz sample rate for PCM16
 def audio_callback(in_data, frame_count, time_info, status):
     """Callback for audio recording"""
     if STATE.audio.is_recording and hasattr(STATE.audio, 'queue'):
-        # Update audio levels
-        STATE.audio.visualizer.update_input_level(in_data)
+        # Calculate audio level and update display
+        audio_data = numpy.frombuffer(in_data, dtype=numpy.int16)
+        audio_level = numpy.abs(audio_data).mean() / 32768.0  # Normalize to 0-1
+        STATE.audio.display.update_input_level(audio_level)
         
         # Update conversation state
-        audio_level = STATE.audio.visualizer.input_level
         STATE.conversation.update_human_audio(audio_level)
         
         # Always process audio when recording is active and not in RESPONDING state
         if STATE.response_state != ResponseState.RESPONDING:
             STATE.audio.queue.put(in_data)
         
-        # Update visualization with conversation status
+        # Update display
         if frame_count % 2 == 0:  # Reduce update frequency
             status = STATE.conversation.get_conversation_status()
-            print(STATE.audio.visualizer.get_visualization(status), end='', flush=True)
-            
-            # Debug output for audio levels
-            if audio_level > 0.1:  # Only show when there's significant audio
-                print(f"\rAudio Level: {audio_level:.2f}", end='', flush=True)
+            STATE.audio.display.set_status(status)
+            STATE.audio.display.render()
         
     return (in_data, pyaudio.paContinue)
 
@@ -352,8 +350,10 @@ async def handle_server_events(ws):
                         if STATE.audio.player is None:
                             STATE.audio.player = AudioPlayer()
                             STATE.audio.player.start()
-                        # Update visualizer with output audio
-                        STATE.audio.visualizer.update_output_level(audio_data)
+                        # Update display with output audio level
+                        audio_data_np = numpy.frombuffer(audio_data, dtype=numpy.int16)
+                        output_level = numpy.abs(audio_data_np).mean() / 32768.0
+                        STATE.audio.display.update_output_level(output_level)
                         STATE.audio.player.play(audio_data)
                         
                 elif event_type == "response.done":
@@ -374,12 +374,15 @@ async def handle_server_events(ws):
                         
                 elif event_type == "input_audio_buffer.speech_started":
                     STATE.response_state = ResponseState.PROCESSING
+                    STATE.audio.display.start_user_speech()
                     
                 elif event_type == "input_audio_buffer.speech_stopped":
-                    pass  # Let the server handle turn detection
+                    if STATE.audio.display.current_line:
+                        STATE.audio.display.complete_current_line()
                     
                 elif event_type == "conversation.item.input_audio_transcription.completed":
-                    print(f"\nYou: {event['transcript']}")
+                    STATE.audio.display.update_current_text(event['transcript'])
+                    STATE.audio.display.complete_current_line()
                 
             except json.JSONDecodeError:
                 print(f"\nInvalid JSON: {msg_str}")
