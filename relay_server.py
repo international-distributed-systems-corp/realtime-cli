@@ -262,6 +262,19 @@ async def handle_client(client_ws):
         await client_ws.close()
 
 async def main():
+    print("""     _           _             _             _               _ 
+    ( ) _       ( )_        _ ( )           ( )_            ( )
+   _| |(_)  ___ | ,_) _ __ (_)| |_    _   _ | ,_)   __     _| |
+ /'_` || |/',__)| |  ( '__)| || '_`\ ( ) ( )| |   /'__`\ /'_` |
+( (_| || |\__, \| |_ | |   | || |_) )| (_) || |_ (  ___/( (_| |
+`\__,_)(_)(____/`\__)(_)   (_)(_,__/'`\___/'`\__)`\____)`\__,_)
+                      ( )_                                     
+     ___  _   _   ___ | ,_)   __    ___ ___    ___             
+   /',__)( ) ( )/',__)| |   /'__`\/' _ ` _ `\/',__)            
+ _ \__, \| (_) |\__, \| |_ (  ___/| ( ) ( ) |\__, \            
+(_)(____/`\__, |(____/`\__)`\____)(_) (_) (_)(____/            
+         ( )_| |                                               
+         `\___/'                                               """)
     print(f"Relay server started on ws://localhost:{LOCAL_SERVER_PORT}")
     async with websockets.serve(handle_client, "localhost", LOCAL_SERVER_PORT, compression=None):
         await asyncio.Future()  # run forever
