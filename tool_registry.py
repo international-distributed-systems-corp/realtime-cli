@@ -102,13 +102,13 @@ class Neo4jConnection:
             return
 
         # Default connection details if not provided in environment
-        uri = os.getenv("NEO4J_URI", "bolt://bolt.n4j.distributed.systems")  # Use bolt:// instead of neo4j://
+        uri = os.getenv("NEO4J_URI", "neo4j://bolt.n4j.distributed.systems")
         user = os.getenv("NEO4J_USER", "neo4j")
         password = os.getenv("NEO4J_PASSWORD", "Backstab2025!")
         
-        # Create driver with direct connection
         try:
             self.driver = GraphDatabase.driver(uri, auth=(user, password))
+            # Verify connectivity synchronously
             self.driver.verify_connectivity()
             logger.info("Neo4j connection established successfully")
         except Exception as e:
