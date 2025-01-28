@@ -11,6 +11,7 @@ import numpy
 import pyaudio
 import logging
 import threading
+from scipy import signal
 import base64
 import signal
 from typing import Optional, Dict, Any
@@ -251,9 +252,16 @@ session_manager = SessionManager()
 
 # Audio recording settings
 CHUNK = 1024
-FORMAT = pyaudio.paInt16  # Changed to paInt16 for PCM16
+FORMAT = pyaudio.paInt16
 CHANNELS = 1
-RATE = 24000  # OpenAI requires 24kHz sample rate for PCM16
+RATE = 11025  # Lower rate for better echo cancellation
+TARGET_RATE = 24000  # OpenAI requires 24kHz
+
+def resample_audio(audio_data, from_rate, to_rate):
+    """Resample audio data between different sample rates"""
+    audio_array = numpy.frombuffer(audio_data, dtype=numpy.int16)
+    resampled = signal.resample(audio_array, int(len(audio_array) * to_rate / from_rate))
+    return resampled.astype(numpy.int16).tobytes()
 
 def audio_callback(in_data, frame_count, time_info, status):
     """Callback for audio recording"""
@@ -292,10 +300,12 @@ async def start_recording(ws):
     while STATE.audio.is_recording:
         try:
             audio_data = STATE.audio.queue.get_nowait()
+            # Resample from RATE to TARGET_RATE for OpenAI
+            resampled_audio = resample_audio(audio_data, RATE, TARGET_RATE)
             event = {
                 "event_id": f"evt_{uuid.uuid4().hex[:6]}",
                 "type": "input_audio_buffer.append",
-                "audio": base64.b64encode(audio_data).decode('utf-8')
+                "audio": base64.b64encode(resampled_audio).decode('utf-8')
             }
             await ws.send(json.dumps(event))
         except Empty:
@@ -367,7 +377,12 @@ async def handle_server_events(ws):
                     if (STATE.response_state == ResponseState.RESPONDING and 
                         event["response_id"] == STATE.current_response_id):
                         # Decode and play audio
-                        audio_data = base64.b64decode(event["delta"])
+                        # Resample from TARGET_RATE back to RATE for playback
+                        audio_data = resample_audio(
+                            base64.b64decode(event["delta"]),
+                            TARGET_RATE,
+                            RATE
+                        )
                         if STATE.audio.player is None:
                             STATE.audio.player = AudioPlayer()
                             STATE.audio.player.start()
