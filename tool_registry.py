@@ -134,8 +134,10 @@ async def get_session(db: Neo4jConnection = Depends(get_db)):
     session = await db.get_session()
     if session is None:
         raise HTTPException(status_code=500, detail="Neo4j session unavailable.")
-    async with session as s:
-        yield s
+    try:
+        yield session
+    finally:
+        session.close()
 
 # Create FastAPI app
 web_app = FastAPI()
@@ -153,7 +155,7 @@ web_app.add_middleware(
 async def execute_tool(tool_id: str, input_data: Dict[str, Any], session) -> Dict[str, Any]:
         """Execute a single tool by looking up the Python code in Neo4j."""
         logger.info(f"Executing tool with id: {tool_id}")
-        result = await session.run(
+        result = session.run(
             """
             MATCH (t:Tool)-[:HAS_CODE]->(c:ToolCode)
             WHERE ID(t) = $tool_id
@@ -162,7 +164,7 @@ async def execute_tool(tool_id: str, input_data: Dict[str, Any], session) -> Dic
             tool_id=int(tool_id)
         )
 
-        record = await result.single()
+        record = result.single()
         if record:
             code = record["code"]
             try:
