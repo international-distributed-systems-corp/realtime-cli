@@ -135,7 +135,7 @@ class RealtimeRelay:
         Connect to the Realtime API over WebSocket using ephemeral token.
         """
         # Build the Realtime wss URL with proper hostname
-        base_url = "wss://realtime.openai.com/v1/chat"
+        base_url = "wss://arthurcolle--realtime-relay-dev.modal.run/v1/chat"
         
         # Ensure proper SSL/TLS setup
         ssl_context = None  # Let websockets use default SSL context
@@ -149,7 +149,7 @@ class RealtimeRelay:
             base_url,
             additional_headers=headers,
             ssl=ssl_context,
-            host="realtime.openai.com"  # Explicitly set host header
+            host="arthurcolle--realtime-relay-dev.modal.run"  # Explicitly set host header
         )
 
     async def close(self):
