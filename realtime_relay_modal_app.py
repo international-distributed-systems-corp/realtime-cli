@@ -19,7 +19,9 @@ logger = logging.getLogger(__name__)
 web_app = FastAPI(
     title="Realtime Relay",
     description="WebSocket relay for realtime communication",
-    version="1.0.0"
+    version="1.0.0",
+    root_path="",
+    root_path_in_servers=False
 )
 
 @web_app.get("/")
@@ -141,12 +143,11 @@ async def websocket_endpoint(websocket: WebSocket):
     keep_warm=1,
     allow_concurrent_inputs=True,  # Allow multiple WebSocket connections
     timeout=600,  # 10 minute timeout for long-running WebSocket connections
-    container_idle_timeout=300  # Keep container alive for 5 minutes after last request
+    container_idle_timeout=300,  # Keep container alive for 5 minutes after last request
 )
 @asgi_app()
 def fastapi_app():
     """ASGI app for handling WebSocket connections"""
-    web_app.root_path = ""  # Ensure proper WebSocket path handling
     return web_app
 
 if __name__ == "__main__":
