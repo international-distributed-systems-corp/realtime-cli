@@ -29,6 +29,7 @@ from utils import (
     ProgressSpinner,
     handle_interrupt
 )
+from services.thought_analyzer import ThoughtAnalyzer
 from visualizer import AudioVisualizer
 from events import EventHandler, EventType
 from state import SessionState, ResponseState, AudioState
