@@ -34,14 +34,17 @@ class AudioVisualizer:
         rms = np.sqrt(np.mean(samples.astype(np.float32)**2))
         self.output_level = min(1.0, rms / 32768.0)
 
-    def get_visualization(self) -> str:
-        """Returns a string visualization of current audio levels"""
+    def get_visualization(self, conversation_status: str = "") -> str:
+        """Returns a string visualization of current audio levels and conversation state"""
         in_bars = int(self.input_level * self.width)
         out_bars = int(self.output_level * self.width)
         
         in_viz = f"In  [{('|' * in_bars).ljust(self.width)}] {self.input_level:.2f}"
         out_viz = f"Out [{('|' * out_bars).ljust(self.width)}] {self.output_level:.2f}"
         
+        # Add conversation status if provided
+        if conversation_status:
+            return f"\r{in_viz}\n{out_viz}\n{conversation_status}"
         return f"\r{in_viz}\n{out_viz}"
 
     def get_dynamic_duck_ratio(self) -> float:

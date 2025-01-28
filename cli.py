@@ -17,6 +17,7 @@ from pathlib import Path
 from queue import Queue, Empty
 
 from visualizer import AudioVisualizer
+from conversation import ConversationManager
 
 from utils import (
     console,
@@ -209,6 +210,7 @@ STATE = SessionState()
 STATE.audio.queue = Queue()  # Initialize audio queue
 STATE.audio.player = None  # Initialize player attribute
 STATE.audio.visualizer = AudioVisualizer()  # Add visualizer
+STATE.conversation = ConversationManager()  # Add conversation manager
 
 # Enhanced session config
 DEFAULT_SESSION_CONFIG = {
@@ -239,17 +241,20 @@ RATE = 24000  # OpenAI requires 24kHz sample rate for PCM16
 def audio_callback(in_data, frame_count, time_info, status):
     """Callback for audio recording"""
     if STATE.audio.is_recording and hasattr(STATE.audio, 'queue'):
-        # Update visualizer with input audio
+        # Update audio levels
         STATE.audio.visualizer.update_input_level(in_data)
         
-        # Only record if AI is not speaking and input level is significant
-        if (STATE.response_state != ResponseState.RESPONDING and 
-            STATE.audio.visualizer.input_level > 0.1):
+        # Update conversation state
+        STATE.conversation.update_human_audio(STATE.audio.visualizer.input_level)
+        
+        # Process audio based on conversation state
+        if STATE.conversation.should_process_audio():
             STATE.audio.queue.put(in_data)
         
-        # Update visualization less frequently to reduce flicker
-        if frame_count % 3 == 0:  # Only update every 3rd frame
-            print(STATE.audio.visualizer.get_visualization(), end='', flush=True)
+        # Update visualization with conversation status
+        if frame_count % 2 == 0:  # Reduce update frequency
+            status = STATE.conversation.get_conversation_status()
+            print(STATE.audio.visualizer.get_visualization(status), end='', flush=True)
         
     return (in_data, pyaudio.paContinue)
 
