@@ -233,23 +233,7 @@ async def handle_client(client_ws, tool_registry=None):
                 except asyncio.TimeoutError:
                     continue
                     
-                    # Validate event type
-                    if "type" not in data:
-                        error_event = {
-                            "event_id": f"evt_{uuid.uuid4().hex[:6]}",
-                            "type": "error",
-                            "error": {
-                                "type": "invalid_request_error",
-                                "code": "invalid_event",
-                                "message": "The 'type' field is missing",
-                                "param": "type"
-                            }
-                        }
-                        await client_ws.send(json.dumps(error_event))
-                        continue
-
-                    # Handle function calls
-                    if data.get("type") == "function.call":
+                    # Pass through all events to upstream
                         try:
                             result = await tool_registry.call_function(
                                 data["name"],
