@@ -277,12 +277,25 @@ async def handle_client(client_ws):
                         
                     # Handle errors
                     elif data.get("type") == "error":
-                        print(f"Error from OpenAI: {data.get('error', {}).get('message', 'Unknown error')}")
-                        
-                    await client_ws.send(data_str)
+                        error_msg = data.get('error', {}).get('message', 'Unknown error')
+                        print(f"Error from OpenAI: {error_msg}")
+                        # Ensure proper error response format
+                        error_response = {
+                            "event_id": f"evt_{uuid.uuid4().hex[:6]}",
+                            "type": "error",
+                            "error": {
+                                "type": "openai_error",
+                                "code": "api_error",
+                                "message": error_msg
+                            }
+                        }
+                        await client_ws.send(json.dumps(error_response))
+                    else:
+                        await client_ws.send(data_str)
                     
             except websockets.ConnectionClosed:
-                pass
+                print("WebSocket connection closed")
+                break
             except Exception as e:
                 error_event = {
                     "event_id": f"evt_{uuid.uuid4().hex[:6]}",
@@ -296,8 +309,9 @@ async def handle_client(client_ws):
                 }
                 try:
                     await client_ws.send(json.dumps(error_event))
-                except:
-                    pass
+                except Exception as send_error:
+                    print(f"Failed to send error event: {send_error}")
+                break
 
         done, pending = await asyncio.wait(
             [asyncio.create_task(relay_local_to_upstream()),
