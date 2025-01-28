@@ -169,6 +169,10 @@ class AudioManager:
                 
     def play(self, audio_data: bytes):
         """Queue audio data for playback"""
+        # Don't play if speech is detected
+        if self.state.response_state == ResponseState.PROCESSING:
+            return
+            
         if not self.state.audio.is_playing:
             self.start_playback()
         self.state.audio.output_queue.put(audio_data)
@@ -381,6 +385,27 @@ async def handle_server_events(ws):
                         STATE.audio.is_recording = True
                         
                 elif event_type == "input_audio_buffer.speech_started":
+                    # Stop current response and playback when speech detected
+                    if STATE.response_state == ResponseState.RESPONDING:
+                        # Clear audio queue and stop playback
+                        while not STATE.audio.output_queue.empty():
+                            STATE.audio.output_queue.get()
+                        if STATE.audio.player:
+                            STATE.audio.player.stop()
+                            STATE.audio.player = None
+                            
+                        # Cancel current response
+                        cancel_event = {
+                            "event_id": f"evt_{uuid.uuid4().hex[:6]}",
+                            "type": "response.cancel",
+                            "response_id": STATE.current_response_id
+                        }
+                        await ws.send(json.dumps(cancel_event))
+                        
+                        # Reset state
+                        STATE.current_response_id = None
+                        STATE.response_state = ResponseState.IDLE
+                        
                     STATE.response_state = ResponseState.PROCESSING
                     STATE.audio.display.start_user_speech()
                     
