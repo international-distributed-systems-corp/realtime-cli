@@ -64,26 +64,26 @@ class Tool(BaseModel):
     code: str
 
 class ToolResponse(BaseModel):
-    id: str
+    id: str  # UUID string format
     name: str
     description: str
     input_schema: dict
     output_schema: dict
 
 class ToolExecutionRequest(BaseModel):
-    tool_id: str
+    tool_id: str  # UUID string format
     input_data: Dict[str, Any]
 
 class ToolExecutionResponse(BaseModel):
-    tool_id: str
+    tool_id: str  # UUID string format
     output_data: Dict[str, Any]
 
 class SequentialToolExecutionRequest(BaseModel):
-    tool_ids: List[str]
+    tool_ids: List[str]  # List of UUID strings
     initial_input: Dict[str, Any]
 
 class ParallelToolExecutionRequest(BaseModel):
-    tool_ids: List[str]
+    tool_ids: List[str]  # List of UUID strings
     input_data: Dict[str, Dict[str, Any]]
 
 # Neo4j connection management
@@ -158,10 +158,10 @@ async def execute_tool(tool_id: str, input_data: Dict[str, Any], session) -> Dic
         result = session.run(
             """
             MATCH (t:Tool)-[:HAS_CODE]->(c:ToolCode)
-            WHERE ID(t) = $tool_id
+            WHERE t.id = $tool_id
             RETURN c.code AS code
             """,
-            tool_id=int(tool_id)
+            tool_id=tool_id
         )
 
         record = result.single()
@@ -193,7 +193,7 @@ async def health_check():
 @web_app.post("/tools", response_model=ToolResponse)
 async def create_tool(tool: Tool, session=Depends(get_session)):
         logger.info(f"Creating new tool: {tool.name}")
-        result = await session.run(
+        result = session.run(
             """
             CREATE (t:Tool {name: $name, description: $description})
             CREATE (s:ToolSchema {input_schema: $input_schema, output_schema: $output_schema})
@@ -208,9 +208,10 @@ async def create_tool(tool: Tool, session=Depends(get_session)):
             output_schema=json.dumps(tool.output_schema),
             code=tool.code,
         )
-
-        record = await result.single()
+        print(result)
+        record = result.single()
         if record:
+            print(record)
             tool_node = record["t"]
             schema_node = record["s"]
             logger.info(f"Tool created successfully: {tool.name}")
@@ -228,19 +229,22 @@ async def create_tool(tool: Tool, session=Depends(get_session)):
 @web_app.get("/tools", response_model=List[ToolResponse])
 async def get_tools(session=Depends(get_session)):
         logger.info("Fetching all tools")
-        result = await session.run(
+        result = session.run(
             """
             MATCH (t:Tool)-[:HAS_SCHEMA]->(s:ToolSchema)
             RETURN t, s
             """
         )
         tools = []
-        async for record in result:
+        records = result.data()  # Remove await since result.data() returns a list directly
+        print(records)
+        for record in records:
             tool = record["t"]
             schema = record["s"]
+
             tools.append(
                 ToolResponse(
-                    id=str(tool.id),
+                    id=str(tool.id) if hasattr(tool, 'id') and tool.id is not None else None,
                     name=tool["name"],
                     description=tool["description"],
                     input_schema=json.loads(schema["input_schema"]),
@@ -253,15 +257,15 @@ async def get_tools(session=Depends(get_session)):
 @web_app.get("/tools/{tool_id}", response_model=ToolResponse)
 async def get_tool(tool_id: str, session=Depends(get_session)):
         logger.info(f"Fetching tool with id: {tool_id}")
-        result = await session.run(
+        result = session.run(
             """
             MATCH (t:Tool)-[:HAS_SCHEMA]->(s:ToolSchema)
-            WHERE ID(t) = $tool_id
+            WHERE t.id = $tool_id
             RETURN t, s
             """,
-            tool_id=int(tool_id),
+            tool_id=tool_id,
         )
-        record = await result.single()
+        record = result.single()
         if record:
             tool = record["t"]
             schema = record["s"]
@@ -280,10 +284,10 @@ async def get_tool(tool_id: str, session=Depends(get_session)):
 @web_app.put("/tools/{tool_id}", response_model=ToolResponse)
 async def update_tool(tool_id: str, tool: Tool, session=Depends(get_session)):
         logger.info(f"Updating tool with id: {tool_id}")
-        result = await session.run(
+        result = session.run(
             """
             MATCH (t:Tool)-[:HAS_SCHEMA]->(s:ToolSchema)
-            WHERE ID(t) = $tool_id
+            WHERE t.id = $tool_id
             SET t.name = $name,
                 t.description = $description,
                 s.input_schema = $input_schema,
@@ -293,7 +297,7 @@ async def update_tool(tool_id: str, tool: Tool, session=Depends(get_session)):
             SET c.code = $code
             RETURN t, s
             """,
-            tool_id=int(tool_id),
+            tool_id=tool_id,
             name=tool.name,
             description=tool.description,
             input_schema=json.dumps(tool.input_schema),
@@ -301,7 +305,7 @@ async def update_tool(tool_id: str, tool: Tool, session=Depends(get_session)):
             code=tool.code,
         )
 
-        record = await result.single()
+        record = result.single()
         if record:
             tool_node = record["t"]
             schema_node = record["s"]
@@ -320,14 +324,14 @@ async def update_tool(tool_id: str, tool: Tool, session=Depends(get_session)):
 @web_app.delete("/tools/{tool_id}")
 async def delete_tool(tool_id: str, session=Depends(get_session)):
         logger.info(f"Deleting tool with id: {tool_id}")
-        result = await session.run(
+        result = session.run(
             """
             MATCH (t:Tool)-[:HAS_SCHEMA]->(s:ToolSchema)
-            WHERE ID(t) = $tool_id
+            WHERE t.id = $tool_id
             OPTIONAL MATCH (t)-[:HAS_CODE]->(c:ToolCode)
             DETACH DELETE t, s, c
             """,
-            tool_id=int(tool_id),
+            tool_id=tool_id,
         )
         if result.consume().counters.nodes_deleted > 0:
             logger.info(f"Tool deleted successfully: {tool_id}")
