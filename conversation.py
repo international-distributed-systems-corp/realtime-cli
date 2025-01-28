@@ -1,5 +1,5 @@
 from enum import Enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, List, Deque
 from collections import deque
 import numpy as np
@@ -16,8 +16,8 @@ class ConversationMetrics:
     """Tracks conversation flow metrics"""
     last_human_speech_end: float = 0.0
     last_ai_speech_end: float = 0.0
-    speech_gaps: Deque[float] = deque(maxlen=10)
-    turn_durations: Deque[float] = deque(maxlen=10)
+    speech_gaps: Deque[float] = field(default_factory=lambda: deque(maxlen=10))
+    turn_durations: Deque[float] = field(default_factory=lambda: deque(maxlen=10))
     interruption_count: int = 0
 
 class ConversationManager:
