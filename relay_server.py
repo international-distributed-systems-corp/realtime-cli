@@ -381,18 +381,33 @@ async def main():
     try:
         server = await websockets.serve(
             lambda ws: handle_client(ws, tool_registry), 
-            "localhost", 
+            "127.0.0.1",  # Use IP address instead of hostname
             LOCAL_SERVER_PORT, 
             compression=None
         )
-        await asyncio.Future()  # run forever
+        
+        # Set up clean shutdown
+        loop = asyncio.get_running_loop()
+        stop = loop.create_future()
+        
+        def shutdown(sig, frame):
+            logger.info("Received shutdown signal", extra={'event': 'server.shutdown', 'signal': sig.name})
+            stop.set_result(None)
+            
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, lambda s=sig: shutdown(s, None))
+            
+        try:
+            await stop  # Wait for shutdown signal
+        finally:
+            logger.info("Closing server connections...")
+            server.close()
+            await server.wait_closed()
+            
     except Exception as e:
         logger.error(f"Server error: {e}", extra={'event': 'error.server', 'error': str(e)})
     finally:
         logger.info("Server shutting down.", extra={'event': 'server.stop'})
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Relay server shutting down.", extra={'event': 'server.stop', 'reason': 'keyboard_interrupt'})
+    asyncio.run(main())

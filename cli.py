@@ -615,7 +615,7 @@ async def main():
         print(f"Connecting to relay at {RELAY_SERVER_URL} ...")
         
         async with websockets.connect(
-            RELAY_SERVER_URL,
+            RELAY_SERVER_URL.replace("localhost", "127.0.0.1"),  # Use IP address
             ping_interval=20,
             ping_timeout=10,
             close_timeout=5,
