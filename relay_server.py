@@ -381,13 +381,13 @@ async def main():
     print(f"Starting relay server on ws://localhost:{LOCAL_SERVER_PORT}")
     
     try:
-        async with websockets.serve(
+        server = await websockets.serve(
             lambda ws: handle_client(ws, tool_registry), 
             "localhost", 
             LOCAL_SERVER_PORT, 
             compression=None
-        ):
-            await asyncio.Future()  # run forever
+        )
+        await asyncio.Future()  # run forever
     except Exception as e:
         print(f"Server error: {e}")
     finally:
