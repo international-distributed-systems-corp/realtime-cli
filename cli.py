@@ -232,8 +232,8 @@ if missing_vars:
     exit(1)
 
 # Initialize configurations
-TOOL_REGISTRY_URL = os.environ.get("TOOL_REGISTRY_URL", "http://localhost:2016")
-RELAY_SERVER_URL = "wss://arthurcolle--realtime-relay.modal.run/ws"  # Production Modal URL
+TOOL_REGISTRY_URL = os.environ.get("TOOL_REGISTRY_URL", "https://arthurcolle--tools.modal.run")
+RELAY_SERVER_URL = "wss://arthurcolle--realtime-relay-dev.modal.run/ws"  # Production Modal URL
 AUDIO_CHUNK = 1024
 FORMAT = pyaudio.paFloat32
 CHANNELS = 1
