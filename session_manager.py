@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 import logging
+from system_tools import SystemTools
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class SessionManager:
     def __init__(self):
         self.config = SessionConfig()
         self._active_tools: Dict[str, Dict[str, Any]] = {}
+        self.system = SystemTools()  # Initialize system tools
         
     def update_system_prompt(self, prompt: str) -> None:
         """Update the system instructions"""
