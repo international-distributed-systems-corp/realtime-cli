@@ -7,7 +7,17 @@ import asyncio
 import websockets
 import requests
 import logging
+from datetime import datetime
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('relay_events.log'),
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger(__name__)
 import uuid
 import aiohttp
@@ -227,6 +237,9 @@ async def handle_client(client_ws, tool_registry=None):
                     # Ensure event_id exists
                     if "event_id" not in data:
                         data["event_id"] = f"evt_{uuid.uuid4().hex[:6]}"
+                    
+                    # Log client -> server event
+                    logger.info(f"Client -> Server | Event: {data['type']} | ID: {data['event_id']}")
                         
                     # Add timeout to upstream send
                     await asyncio.wait_for(relay.upstream_ws.send(json.dumps(data)), timeout=2.0)
@@ -282,6 +295,9 @@ async def handle_client(client_ws, tool_registry=None):
             try:
                 async for data_str in relay.upstream_ws:
                     data = json.loads(data_str)
+                    
+                    # Log server -> client event
+                    logger.info(f"Server -> Client | Event: {data.get('type')} | ID: {data.get('event_id', 'N/A')}")
                     
                     # Track rate limits
                     if data.get("type") == "rate_limits.updated":
