@@ -20,6 +20,7 @@ from queue import Queue, Empty
 from conversation_display import ConversationDisplay
 from conversation import ConversationManager
 from audio_training.storage import AudioStorage
+from services.thought_analyzer import ThoughtAnalyzer
 
 from utils import (
     console,
