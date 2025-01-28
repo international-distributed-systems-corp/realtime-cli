@@ -1,203 +1,381 @@
 import os
 import json
 import logging
-import uvicorn
-from enum import Enum
+import asyncio
 from typing import Dict, Any, List, Optional, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from modal import App, Image, Secret, asgi_app
 
-# Set up logging
+# Try to import Neo4j
+try:
+    from neo4j import AsyncGraphDatabase
+    NEO4J_AVAILABLE = True
+except ImportError:
+    print("Warning: Neo4j driver not installed. Some functionality may be limited.")
+    NEO4J_AVAILABLE = False
+    AsyncGraphDatabase = None
+
+# Configuration
+TOOL_MGMT_APP_LABEL = "tool_management_api"
+NEO4J_SECRET_NAME = "NEO4J_CREDENTIALS"
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+# Logging setup
+logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
+# Modal configuration
+image = (
+    Image.debian_slim()
+    .pip_install([
+        "fastapi",
+        "uvicorn",
+        "pydantic",
+        "neo4j",
+        "python-dotenv",
+    ])
+    .apt_install(["python3-dev", "gcc"])
 )
 
-class ToolType(str, Enum):
-    ENDPOINT = "endpoint"
-    FUNCTION = "function"
-    SCRIPT = "script"
+# Create the Modal stub
+stub = App(TOOL_MGMT_APP_LABEL)
 
+# Pydantic models
 class Tool(BaseModel):
-    """Model representing a tool definition"""
     name: str
     description: str
-    type: ToolType
-    input_schema: Dict[str, Any]
-    output_schema: Dict[str, Any]
-    code: Optional[str] = None
-    endpoint: Optional[Dict[str, str]] = None
-    version: str = "1.0.0"
-    tags: List[str] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    input_schema: dict
+    output_schema: dict
+    code: str
 
-# Initialize FastAPI app
-app = FastAPI(
-    title="Tool Registry API",
-    version="1.0.0",
-    docs_url="/docs"
-)
+class ToolResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    input_schema: dict
+    output_schema: dict
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+class ToolExecutionRequest(BaseModel):
+    tool_id: str
+    input_data: Dict[str, Any]
 
-class ToolRegistry:
-    """Manages registration and access to tools"""
-    
+class ToolExecutionResponse(BaseModel):
+    tool_id: str
+    output_data: Dict[str, Any]
+
+class SequentialToolExecutionRequest(BaseModel):
+    tool_ids: List[str]
+    initial_input: Dict[str, Any]
+
+class ParallelToolExecutionRequest(BaseModel):
+    tool_ids: List[str]
+    input_data: Dict[str, Dict[str, Any]]
+
+# Neo4j connection management
+class Neo4jConnection:
+    """Manages the Neo4j database connection."""
+
     def __init__(self):
-        self.tools: Dict[str, Tool] = {}
-        self.tool_versions: Dict[str, List[Tool]] = {}
-        self.tags: Dict[str, List[str]] = {}
-        self.search_index: Dict[str, List[float]] = {}  # For vector search
-        logger.info("Tool registry initialized")
+        """Initialize the Neo4j connection using environment variables from secrets."""
+        if not NEO4J_AVAILABLE:
+            logger.warning("Neo4j driver not installed. Some functionalities are disabled.")
+            return
 
-    def register_tool(self, tool: Tool) -> str:
-        """Register a new tool or update existing one"""
+        uri = os.getenv("NEO4J_URI", "bolt://n4j.brainchain.cloud")
+        user = os.getenv("NEO4J_USER", "neo4j")
+        password = os.getenv("NEO4J_PASSWORD", "password")
+        self.driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
+
+    async def close(self):
+        """Close the Neo4j connection."""
+        if NEO4J_AVAILABLE and self.driver is not None:
+            await self.driver.close()
+
+    async def get_session(self):
+        """Get a new Neo4j session."""
+        if NEO4J_AVAILABLE and self.driver is not None:
+            return self.driver.session()
+        return None
+
+async def get_db():
+    """Dependency to get database session."""
+    db = Neo4jConnection()
+    try:
+        yield db
+    finally:
+        await db.close()
+
+async def get_session(db: Neo4jConnection = Depends(get_db)):
+    """Get a new Neo4j session."""
+    session = await db.get_session()
+    if session is None:
+        raise HTTPException(status_code=500, detail="Neo4j session unavailable.")
+    async with session as s:
+        yield s
+
+# Creating the FastAPI application
+@stub.function(
+    image=image,
+    secrets=[Secret.from_name(NEO4J_SECRET_NAME)],
+)
+@asgi_app()
+def fastapi_app():
+    """The FastAPI instance, wrapped in a Modal asgi_app."""
+    app = FastAPI(title="Tool Management API", version="1.0.0")
+
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Utility function for tool execution
+    async def execute_tool(tool_id: str, input_data: Dict[str, Any], session) -> Dict[str, Any]:
+        """Execute a single tool by looking up the Python code in Neo4j."""
+        logger.info(f"Executing tool with id: {tool_id}")
+        result = await session.run(
+            """
+            MATCH (t:Tool)-[:HAS_CODE]->(c:ToolCode)
+            WHERE ID(t) = $tool_id
+            RETURN c.code AS code
+            """,
+            tool_id=int(tool_id)
+        )
+
+        record = await result.single()
+        if record:
+            code = record["code"]
+            try:
+                exec_globals = {"input_data": input_data, "output_data": {}}
+                exec(code, exec_globals)
+                output_data = exec_globals["output_data"]
+                logger.info(f"Tool executed successfully: {tool_id}")
+                return output_data
+            except Exception as e:
+                logger.error(f"Error executing tool {tool_id}: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Error executing tool: {str(e)}")
+        else:
+            logger.warning(f"Tool not found for execution with id: {tool_id}")
+            raise HTTPException(status_code=404, detail="Tool not found")
+
+    @app.get("/")
+    async def root():
+        """Root endpoint."""
+        return {"message": "Welcome to the Tool Management API"}
+
+    @app.get("/health")
+    async def health_check():
+        """Health check endpoint."""
+        return {"status": "healthy"}
+
+    @app.post("/tools", response_model=ToolResponse)
+    async def create_tool(tool: Tool, session=Depends(get_session)):
+        logger.info(f"Creating new tool: {tool.name}")
+        result = await session.run(
+            """
+            CREATE (t:Tool {name: $name, description: $description})
+            CREATE (s:ToolSchema {input_schema: $input_schema, output_schema: $output_schema})
+            CREATE (c:ToolCode {code: $code})
+            CREATE (t)-[:HAS_SCHEMA]->(s)
+            CREATE (t)-[:HAS_CODE]->(c)
+            RETURN t, s
+            """,
+            name=tool.name,
+            description=tool.description,
+            input_schema=json.dumps(tool.input_schema),
+            output_schema=json.dumps(tool.output_schema),
+            code=tool.code,
+        )
+
+        record = await result.single()
+        if record:
+            tool_node = record["t"]
+            schema_node = record["s"]
+            logger.info(f"Tool created successfully: {tool.name}")
+            return ToolResponse(
+                id=str(tool_node.id),
+                name=tool_node["name"],
+                description=tool_node["description"],
+                input_schema=json.loads(schema_node["input_schema"]),
+                output_schema=json.loads(schema_node["output_schema"]),
+            )
+        else:
+            logger.error(f"Failed to create tool: {tool.name}")
+            raise HTTPException(status_code=500, detail="Failed to create tool")
+
+    @app.get("/tools", response_model=List[ToolResponse])
+    async def get_tools(session=Depends(get_session)):
+        logger.info("Fetching all tools")
+        result = await session.run(
+            """
+            MATCH (t:Tool)-[:HAS_SCHEMA]->(s:ToolSchema)
+            RETURN t, s
+            """
+        )
+        tools = []
+        async for record in result:
+            tool = record["t"]
+            schema = record["s"]
+            tools.append(
+                ToolResponse(
+                    id=str(tool.id),
+                    name=tool["name"],
+                    description=tool["description"],
+                    input_schema=json.loads(schema["input_schema"]),
+                    output_schema=json.loads(schema["output_schema"]),
+                )
+            )
+        logger.info(f"Fetched {len(tools)} tools")
+        return tools
+
+    @app.get("/tools/{tool_id}", response_model=ToolResponse)
+    async def get_tool(tool_id: str, session=Depends(get_session)):
+        logger.info(f"Fetching tool with id: {tool_id}")
+        result = await session.run(
+            """
+            MATCH (t:Tool)-[:HAS_SCHEMA]->(s:ToolSchema)
+            WHERE ID(t) = $tool_id
+            RETURN t, s
+            """,
+            tool_id=int(tool_id),
+        )
+        record = await result.single()
+        if record:
+            tool = record["t"]
+            schema = record["s"]
+            logger.info(f"Tool found: {tool['name']}")
+            return ToolResponse(
+                id=str(tool.id),
+                name=tool["name"],
+                description=tool["description"],
+                input_schema=json.loads(schema["input_schema"]),
+                output_schema=json.loads(schema["output_schema"]),
+            )
+        else:
+            logger.warning(f"Tool not found with id: {tool_id}")
+            raise HTTPException(status_code=404, detail="Tool not found")
+
+    @app.put("/tools/{tool_id}", response_model=ToolResponse)
+    async def update_tool(tool_id: str, tool: Tool, session=Depends(get_session)):
+        logger.info(f"Updating tool with id: {tool_id}")
+        result = await session.run(
+            """
+            MATCH (t:Tool)-[:HAS_SCHEMA]->(s:ToolSchema)
+            WHERE ID(t) = $tool_id
+            SET t.name = $name,
+                t.description = $description,
+                s.input_schema = $input_schema,
+                s.output_schema = $output_schema
+            WITH t, s
+            MATCH (t)-[:HAS_CODE]->(c:ToolCode)
+            SET c.code = $code
+            RETURN t, s
+            """,
+            tool_id=int(tool_id),
+            name=tool.name,
+            description=tool.description,
+            input_schema=json.dumps(tool.input_schema),
+            output_schema=json.dumps(tool.output_schema),
+            code=tool.code,
+        )
+
+        record = await result.single()
+        if record:
+            tool_node = record["t"]
+            schema_node = record["s"]
+            logger.info(f"Tool updated successfully: {tool_node['name']}")
+            return ToolResponse(
+                id=str(tool_node.id),
+                name=tool_node["name"],
+                description=tool_node["description"],
+                input_schema=json.loads(schema_node["input_schema"]),
+                output_schema=json.loads(schema_node["output_schema"]),
+            )
+        else:
+            logger.warning(f"Tool not found for update with id: {tool_id}")
+            raise HTTPException(status_code=404, detail="Tool not found")
+
+    @app.delete("/tools/{tool_id}")
+    async def delete_tool(tool_id: str, session=Depends(get_session)):
+        logger.info(f"Deleting tool with id: {tool_id}")
+        result = await session.run(
+            """
+            MATCH (t:Tool)-[:HAS_SCHEMA]->(s:ToolSchema)
+            WHERE ID(t) = $tool_id
+            OPTIONAL MATCH (t)-[:HAS_CODE]->(c:ToolCode)
+            DETACH DELETE t, s, c
+            """,
+            tool_id=int(tool_id),
+        )
+        if result.consume().counters.nodes_deleted > 0:
+            logger.info(f"Tool deleted successfully: {tool_id}")
+            return {"message": "Tool deleted successfully"}
+        else:
+            logger.warning(f"Tool not found for deletion with id: {tool_id}")
+            raise HTTPException(status_code=404, detail="Tool not found")
+
+    @app.post("/execute_tool", response_model=ToolExecutionResponse)
+    async def execute_single_tool(request: ToolExecutionRequest, session=Depends(get_session)):
+        logger.info(f"Received request to execute tool: {request.tool_id}")
+        logger.debug(f"Input data: {request.input_data}")
         try:
-            # Store tool by name and version
-            tool_key = f"{tool.name}@{tool.version}"
-            self.tools[tool_key] = tool
-            
-            # Track versions
-            if tool.name not in self.tool_versions:
-                self.tool_versions[tool.name] = []
-            self.tool_versions[tool.name].append(tool)
-            
-            logger.info(f"Registered tool: {tool_key}")
-            return tool_key
-            
+            output_data = await execute_tool(request.tool_id, request.input_data, session)
+            return ToolExecutionResponse(tool_id=request.tool_id, output_data=output_data)
+        except HTTPException as he:
+            logger.error(f"HTTP error while executing tool {request.tool_id}: {str(he)}")
+            raise
         except Exception as e:
-            logger.error(f"Error registering tool {tool.name}: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to register tool: {str(e)}"
-            )
+            logger.error(f"Unexpected error while executing tool {request.tool_id}: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
-    async def call_function(self, name: str, parameters: Dict[str, Any]) -> Any:
-        """Call a registered function with parameters"""
-        tool = await self.get_tool(name)
-        if tool.type != ToolType.FUNCTION:
-            raise ValueError(f"Tool {name} is not a function")
-            
-        if not tool.code:
-            raise ValueError(f"Tool {name} has no function code")
-            
-        # Execute function code with parameters
-        namespace = {}
-        exec(tool.code, namespace)
-        func = namespace.get(name)
-        if not func:
-            raise ValueError(f"Function {name} not found in tool code")
-            
-        return await func(**parameters)
+    @app.post("/execute_tools_sequential", response_model=List[ToolExecutionResponse])
+    async def execute_tools_sequential(request: SequentialToolExecutionRequest, session=Depends(get_session)):
+        logger.info(f"Executing tools sequentially: {request.tool_ids}")
+        current_input = request.initial_input
+        results = []
+        for idx, tool_id in enumerate(request.tool_ids, start=1):
+            logger.info(f"[{idx}/{len(request.tool_ids)}] Executing tool {tool_id}")
+            try:
+                output_data = await execute_tool(tool_id, current_input, session)
+                results.append(ToolExecutionResponse(tool_id=tool_id, output_data=output_data))
+                current_input = output_data  # Pass output as input to next tool
+            except HTTPException as e:
+                logger.error(f"Error executing tool {tool_id} in sequence: {str(e)}")
+                raise HTTPException(status_code=e.status_code, detail=f"Error at tool {tool_id}: {e.detail}")
+            except Exception as e:
+                logger.error(f"Unexpected error executing tool {tool_id}: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Unexpected error at tool {tool_id}: {str(e)}")
 
-    def get_tool(self, name: str, version: Optional[str] = None) -> Tool:
-        """Get a specific tool by name and optional version"""
+        return results
+
+    @app.post("/execute_tools_parallel", response_model=List[ToolExecutionResponse])
+    async def execute_tools_parallel(request: ParallelToolExecutionRequest, session=Depends(get_session)):
+        logger.info(f"Executing tools in parallel: {request.tool_ids}")
+        tasks = []
+        for tool_id in request.tool_ids:
+            in_data = request.input_data.get(tool_id, {})
+            tasks.append(execute_tool(tool_id, in_data, session))
+
         try:
-            if version:
-                tool_key = f"{name}@{version}"
-                if tool_key not in self.tools:
-                    raise KeyError(f"Tool {name} version {version} not found")
-                return self.tools[tool_key]
-            else:
-                # Get latest version if no specific version requested
-                if name not in self.tool_versions:
-                    raise KeyError(f"Tool {name} not found")
-                versions = self.tool_versions[name]
-                return versions[-1]  # Latest version
-                
-        except KeyError as e:
-            logger.warning(str(e))
-            raise HTTPException(
-                status_code=404,
-                detail=str(e)
-            )
+            results = await asyncio.gather(*tasks)
         except Exception as e:
-            logger.error(f"Error retrieving tool {name}: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to retrieve tool: {str(e)}"
-            )
+            logger.error(f"Error during parallel execution: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error during parallel execution: {str(e)}")
 
-    def list_tools(self) -> List[Dict[str, Any]]:
-        """List all registered tools in OpenAI format"""
-        try:
-            tools = []
-            for name in self.tool_versions:
-                tool = self.tool_versions[name][-1]
-                tools.append({
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.input_schema
-                })
-            return tools
-            
-        except Exception as e:
-            logger.error(f"Error listing tools: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to list tools: {str(e)}"
-            )
+        # Bundle results
+        responses = []
+        for tid, output_data in zip(request.tool_ids, results):
+            responses.append(ToolExecutionResponse(tool_id=tid, output_data=output_data))
+        return responses
 
-    def get_tool_versions(self, name: str) -> List[Tool]:
-        """Get all versions of a specific tool"""
-        try:
-            if name not in self.tool_versions:
-                raise KeyError(f"Tool {name} not found")
-            return self.tool_versions[name]
-            
-        except KeyError as e:
-            logger.warning(str(e))
-            raise HTTPException(
-                status_code=404,
-                detail=str(e)
-            )
-        except Exception as e:
-            logger.error(f"Error retrieving versions for {name}: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to retrieve tool versions: {str(e)}"
-            )
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request, exc):
+        logger.error(f"HTTP exception: {exc.detail}")
+        return {"detail": exc.detail}, exc.status_code
 
-# Global registry instance
-registry = ToolRegistry()
-
-@app.post("/tools/endpoint")
-async def register_endpoint_tool(tool: Tool):
-    """Register an HTTP endpoint as a tool"""
-    if tool.type != ToolType.ENDPOINT:
-        raise HTTPException(status_code=400, detail="Tool type must be 'endpoint'")
-    return registry.register_tool(tool)
-
-@app.post("/tools/function") 
-async def register_function_tool(tool: Tool):
-    """Register a Python function as a tool"""
-    if tool.type != ToolType.FUNCTION:
-        raise HTTPException(status_code=400, detail="Tool type must be 'function'")
-    return registry.register_tool(tool)
-
-@app.get("/tools/search")
-async def search_tools(query: str, limit: int = 10):
-    """Search tools by name, description, or tags"""
-    return registry.search_tools(query, limit)
-
-@app.get("/tools/tags/{tag}")
-async def get_tools_by_tag(tag: str):
-    """Get all tools with a specific tag"""
-    return registry.get_tools_by_tag(tag)
-
-@app.get("/tools/{tool_id}/versions")
-async def get_tool_versions(tool_id: str):
-    """Get all versions of a specific tool"""
-    return registry.get_tool_versions(tool_id)
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=2016)
+    return app
