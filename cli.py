@@ -253,7 +253,7 @@ session_manager = SessionManager()
 
 # Enhanced session config
 DEFAULT_SESSION_CONFIG = {
-    "model": "gpt-4",
+    "model": "gpt-4o-realtime",
     "modalities": ["text", "audio"],
     "instructions": "You are a friendly assistant.",
     "voice": "alloy", 
