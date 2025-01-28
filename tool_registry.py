@@ -2,12 +2,12 @@ import os
 import json
 import logging
 import asyncio
+import httpx
 from typing import Dict, Any, List, Optional, Union
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from modal import Image, App, Secret, asgi_app
-from modal import App, Image, Secret, asgi_app
 
 # Try to import Neo4j
 try:
@@ -138,6 +138,41 @@ async def get_session(db: Neo4jConnection = Depends(get_db)):
         yield session
     finally:
         session.close()
+
+class ToolRegistry:
+    """Client for interacting with the Tool Registry service"""
+    
+    def __init__(self):
+        self.base_url = None
+        self.client = None
+        
+    async def connect(self, base_url: str):
+        """Connect to the Tool Registry service"""
+        self.base_url = base_url.rstrip('/')
+        self.client = httpx.AsyncClient(base_url=self.base_url, timeout=30.0)
+        
+    async def list_tools(self) -> List[Dict[str, Any]]:
+        """Get list of available tools"""
+        try:
+            response = await self.client.get("/tools")
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Failed to list tools: {str(e)}")
+            return []
+            
+    async def call_function(self, name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a tool function"""
+        try:
+            response = await self.client.post(f"/execute_tool", json={
+                "tool_id": name,
+                "input_data": parameters
+            })
+            response.raise_for_status()
+            return response.json()["output_data"]
+        except Exception as e:
+            logger.error(f"Failed to execute tool {name}: {str(e)}")
+            raise
 
 # Create FastAPI app
 web_app = FastAPI()
