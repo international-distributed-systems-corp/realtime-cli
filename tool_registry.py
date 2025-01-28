@@ -6,6 +6,7 @@ from typing import Dict, Any, List, Optional, Union
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from modal import Image, App, Secret, asgi_app
 from modal import App, Image, Secret, asgi_app
 
 # Try to import Neo4j
@@ -21,6 +22,21 @@ except ImportError:
 TOOL_MGMT_APP_LABEL = "tool_management_api"
 NEO4J_SECRET_NAME = "distributed-systems"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+# Modal configuration
+image = (
+    Image.debian_slim()
+    .pip_install([
+        "fastapi",
+        "uvicorn", 
+        "pydantic",
+        "neo4j",
+        "python-dotenv"
+    ])
+)
+
+# Create Modal app
+stub = App(TOOL_MGMT_APP_LABEL)
 
 # Logging setup
 logging.basicConfig(level=LOG_LEVEL)
@@ -116,6 +132,11 @@ async def get_session(db: Neo4jConnection = Depends(get_db)):
         yield s
 
 # Creating the FastAPI application
+@stub.function(
+    image=image,
+    secrets=[Secret.from_name(NEO4J_SECRET_NAME)],
+)
+@asgi_app()
 @stub.function(
     image=image,
     secrets=[Secret.from_name(NEO4J_SECRET_NAME)],
