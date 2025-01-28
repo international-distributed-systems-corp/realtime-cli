@@ -109,3 +109,25 @@ class tools:
                 return await func(*args, **kwargs)
             return wrapper
         return decorator
+async def list_tools(self) -> List[Dict[str, Any]]:
+    """List all available tools"""
+    try:
+        response = await self.client.get("/tools")
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logger.error(f"Failed to list tools: {str(e)}")
+        return []
+async def call_function(self, name: str, parameters: Dict[str, Any]) -> Any:
+    """Calls the specified tool with given parameters"""
+    try:
+        response = await self.client.post("/execute_tool", json={
+            "tool_id": name,
+            "input_data": parameters
+        })
+        response.raise_for_status()
+        result = response.json()
+        return result.get('output_data')
+    except Exception as e:
+        logger.error(f"Failed to call function {name}: {str(e)}")
+        raise

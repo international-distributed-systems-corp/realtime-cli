@@ -9,7 +9,7 @@ import requests
 import uuid
 from typing import Optional
 
-from tool_registry import ToolRegistry, Tool
+from tool_registry_client import ToolRegistryClient
 
 ################################################################################
 # Configuration
@@ -37,8 +37,8 @@ if missing_vars:
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 TOOL_REGISTRY_URL = os.environ["TOOL_REGISTRY_URL"]
 
-# Initialize Tool Registry
-tool_registry = ToolRegistry()
+# Initialize Tool Registry Client
+tool_registry = ToolRegistryClient(base_url=TOOL_REGISTRY_URL)
 
 # The port on which our local relay will listen for the CLI:
 LOCAL_SERVER_PORT = 9000
@@ -48,12 +48,14 @@ LOCAL_SERVER_PORT = 9000
 ################################################################################
 
 async def initialize_tool_registry():
-    """Initialize and load tools from the registry"""
+    """Initialize the Tool Registry client"""
     try:
-        await tool_registry.connect(TOOL_REGISTRY_URL)
-        print("Tool Registry initialized successfully")
+        # Test the connection by calling the health endpoint
+        response = await tool_registry.client.get("/health")
+        response.raise_for_status()
+        print("Tool Registry client initialized successfully")
     except Exception as e:
-        print(f"Warning: Failed to initialize Tool Registry: {e}")
+        print(f"Warning: Failed to initialize Tool Registry client: {e}")
         print("Continuing without tool support...")
 
 def create_ephemeral_token(session_config: dict) -> str:
@@ -186,8 +188,7 @@ async def handle_client(client_ws):
         # Load available tools and update session config
         tools = await tool_registry.list_tools()
         if tools:
-            for tool in tools:
-                session_config.setdefault("tools", []).append(tool)
+            session_config.setdefault("tools", []).extend(tools)
         
         # Step 2: Start bi-directional relay
         async def relay_local_to_upstream():
