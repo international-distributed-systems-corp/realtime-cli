@@ -233,7 +233,7 @@ if missing_vars:
 
 # Initialize configurations
 TOOL_REGISTRY_URL = os.environ.get("TOOL_REGISTRY_URL", "http://localhost:2016")
-RELAY_SERVER_URL = "ws://localhost:9000"
+RELAY_SERVER_URL = "wss://arthurcolle--realtime-relay-dev.modal.run/ws"
 AUDIO_CHUNK = 1024
 FORMAT = pyaudio.paFloat32
 CHANNELS = 1
@@ -614,14 +614,35 @@ async def main():
     try:
         print(f"Connecting to relay at {RELAY_SERVER_URL} ...")
         
-        async with websockets.connect(
-            RELAY_SERVER_URL.replace("localhost", "127.0.0.1"),  # Use IP address
-            ping_interval=20,
-            ping_timeout=60,  # Increased timeout
-            close_timeout=10,  # Increased timeout
-            max_size=10 * 1024 * 1024,  # 10MB max message size
-            compression=None  # Disable compression to match server
-        ) as ws:
+        # Configure WebSocket connection with retries
+        retry_count = 0
+        max_retries = 3
+        while retry_count < max_retries:
+            try:
+                async with websockets.connect(
+                    RELAY_SERVER_URL,
+                    ping_interval=20,
+                    ping_timeout=60,
+                    close_timeout=10,
+                    max_size=10 * 1024 * 1024,
+                    ssl=True,  # Enable SSL for wss://
+                    compression=None
+                ) as ws:
+                    print("Connected to relay server")
+                    # Rest of the connection logic...
+                    break  # Exit retry loop on successful connection
+            except (websockets.exceptions.InvalidStatusCode,
+                   websockets.exceptions.InvalidMessage,
+                   websockets.exceptions.ConnectionClosed) as e:
+                retry_count += 1
+                if retry_count < max_retries:
+                    wait_time = 2 ** retry_count  # Exponential backoff
+                    print(f"Connection failed: {str(e)}")
+                    print(f"Retrying in {wait_time} seconds... (Attempt {retry_count + 1}/{max_retries})")
+                    await asyncio.sleep(wait_time)
+                else:
+                    print("Failed to connect after maximum retries")
+                    raise
             print("Connected to relay server")
             # Set up signal handler
             loop = asyncio.get_event_loop()
