@@ -8,7 +8,8 @@ import requests
 from auth.middleware import AuthMiddleware, security
 from datetime import datetime
 from modal import Image, App, asgi_app
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
+from fastapi.security import HTTPAuthorizationCredentials
 from typing import List, Optional
 
 # Configure logging

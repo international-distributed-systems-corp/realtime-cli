@@ -1,6 +1,8 @@
+from datetime import datetime
 from fastapi import HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from .db import Database
+from .models import UsageRecord
 from typing import Optional
 import os
 
