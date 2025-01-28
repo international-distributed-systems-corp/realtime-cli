@@ -262,7 +262,7 @@ async def handle_client(client_ws):
         await client_ws.close()
 
 async def main():
-    print("""     _           _             _             _               _ 
+    print(r"""     _           _             _             _               _ 
     ( ) _       ( )_        _ ( )           ( )_            ( )
    _| |(_)  ___ | ,_) _ __ (_)| |_    _   _ | ,_)   __     _| |
  /'_` || |/',__)| |  ( '__)| || '_`\ ( ) ( )| |   /'__`\ /'_` |
