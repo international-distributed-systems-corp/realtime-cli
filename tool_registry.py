@@ -131,8 +131,20 @@ async def get_session(db: Neo4jConnection = Depends(get_db)):
     async with session as s:
         yield s
 
+# Create FastAPI app
+app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Utility function for tool execution
-    async def execute_tool(tool_id: str, input_data: Dict[str, Any], session) -> Dict[str, Any]:
+async def execute_tool(tool_id: str, input_data: Dict[str, Any], session) -> Dict[str, Any]:
         """Execute a single tool by looking up the Python code in Neo4j."""
         logger.info(f"Executing tool with id: {tool_id}")
         result = await session.run(
@@ -370,9 +382,7 @@ async def get_session(db: Neo4jConnection = Depends(get_db)):
             responses.append(ToolExecutionResponse(tool_id=tid, output_data=output_data))
         return responses
 
-    @app.exception_handler(HTTPException)
-    async def http_exception_handler(request, exc):
-        logger.error(f"HTTP exception: {exc.detail}")
-        return {"detail": exc.detail}, exc.status_code
-
-    return app
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    logger.error(f"HTTP exception: {exc.detail}")
+    return {"detail": exc.detail}, exc.status_code

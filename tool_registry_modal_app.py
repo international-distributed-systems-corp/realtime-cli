@@ -33,31 +33,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Import routes from tool_registry.py
-from tool_registry import (
-    root,
-    health_check,
-    create_tool,
-    get_tools,
-    get_tool,
-    update_tool,
-    delete_tool,
-    execute_single_tool,
-    execute_tools_sequential,
-    execute_tools_parallel,
-)
-
-# Register routes
-app.get("/")(root)
-app.get("/health")(health_check)
-app.post("/tools")(create_tool)
-app.get("/tools")(get_tools)
-app.get("/tools/{tool_id}")(get_tool)
-app.put("/tools/{tool_id}")(update_tool)
-app.delete("/tools/{tool_id}")(delete_tool)
-app.post("/execute_tool")(execute_single_tool)
-app.post("/execute_tools_sequential")(execute_tools_sequential)
-app.post("/execute_tools_parallel")(execute_tools_parallel)
+# Import app from tool_registry.py
+from tool_registry import app
 
 # Wrap the FastAPI app with Modal
 @stub.function(
