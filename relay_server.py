@@ -7,6 +7,7 @@ import asyncio
 import websockets
 import requests
 import logging
+import signal
 from datetime import datetime
 
 # Configure structured logging
