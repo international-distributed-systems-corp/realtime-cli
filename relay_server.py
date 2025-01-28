@@ -134,23 +134,28 @@ class RealtimeRelay:
         """
         Connect to the Realtime API over WebSocket using ephemeral token.
         """
-        # Build the Realtime wss URL with proper hostname
-        base_url = "wss://arthurcolle--realtime-relay-dev.modal.run/v1/chat"
+        # Build the Realtime wss URL with proper hostname and path
+        base_url = "wss://api.openai.com/v1/realtime/chat"
         
-        # Ensure proper SSL/TLS setup
-        ssl_context = None  # Let websockets use default SSL context
-        
+        # Configure WebSocket connection
         headers = {
             "Authorization": f"Bearer {self.ephemeral_token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "OpenAI-Realtime-Client/1.0"
         }
 
-        self.upstream_ws = await websockets.connect(
-            base_url,
-            additional_headers=headers,
-            ssl=ssl_context,
-            host="arthurcolle--realtime-relay-dev.modal.run"  # Explicitly set host header
-        )
+        try:
+            self.upstream_ws = await websockets.connect(
+                base_url,
+                extra_headers=headers,
+                ping_interval=20,
+                ping_timeout=20,
+                close_timeout=10
+            )
+            logger.info("Successfully connected to OpenAI Realtime API")
+        except Exception as e:
+            logger.error(f"Failed to connect to OpenAI Realtime API: {e}")
+            raise
 
     async def close(self):
         if self.upstream_ws:

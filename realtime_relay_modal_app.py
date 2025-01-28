@@ -2,11 +2,11 @@ from modal import Image, Stub, asgi_app
 from fastapi import FastAPI
 import uvicorn
 
-# Create FastAPI app
+# Create FastAPI app with WebSocket support
 web_app = FastAPI()
 
 # Create Modal app and image
-app = Stub("realtime-relay")
+app = Stub("realtime-relay", shared_volumes={})
 image = (
     Image.debian_slim()
     .pip_install(["fastapi", "uvicorn", "websockets", "requests"])
