@@ -20,7 +20,7 @@ web_app = FastAPI()
 app = App("realtime-relay")
 image = (
     Image.debian_slim()
-    .pip_install(["fastapi", "uvicorn", "websockets", "requests"])
+    .pip_install(["fastapi", "uvicorn", "websockets>=12.0", "requests", "python-multipart"])
 )
 
 async def test_connection():
@@ -85,7 +85,8 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.function(
     image=image,
     keep_warm=1,
-    allow_concurrent_inputs=True  # Allow multiple WebSocket connections
+    allow_concurrent_inputs=True,  # Allow multiple WebSocket connections
+    timeout=600  # 10 minute timeout for long-running WebSocket connections
 )
 @asgi_app(label="realtime-relay")
 def fastapi_app():

@@ -233,7 +233,7 @@ if missing_vars:
 
 # Initialize configurations
 TOOL_REGISTRY_URL = os.environ.get("TOOL_REGISTRY_URL", "http://localhost:2016")
-RELAY_SERVER_URL = "wss://arthurcolle--realtime-relay-dev.modal.run/ws"
+RELAY_SERVER_URL = "wss://realtime-relay--fastapi-app.modal.run/ws"  # Update this to your Modal app URL
 AUDIO_CHUNK = 1024
 FORMAT = pyaudio.paFloat32
 CHANNELS = 1
@@ -626,7 +626,11 @@ async def main():
                     close_timeout=10,
                     max_size=10 * 1024 * 1024,
                     ssl=True,  # Enable SSL for wss://
-                    compression=None
+                    compression=None,
+                    extra_headers={
+                        "Upgrade": "websocket",
+                        "Connection": "Upgrade"
+                    }
                 ) as ws:
                     print("Connected to relay server")
                     # Rest of the connection logic...
