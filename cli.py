@@ -503,17 +503,10 @@ async def main():
             }
             await ws.send(json.dumps(init_msg))
             
-            # Wait for session.created event and start recording
-            async for msg_str in ws:
-                event = json.loads(msg_str)
-                if event.get("type") == "session.created":
-                    print("Ready to chat!")
-                    # Initialize audio recording state
-                    STATE.audio.is_recording = True
-                    STATE.response_state = ResponseState.IDLE
-                    break
-                elif event.get("type") == "error":
-                    raise Exception(f"Session initialization failed: {event.get('error', {}).get('message')}")
+            # Start event handler and conversation loops immediately
+            print("Starting chat session...")
+            STATE.audio.is_recording = True
+            STATE.response_state = ResponseState.IDLE
             
             # Run conversation and event handling loops with recording already started
             done, pending = await asyncio.wait(

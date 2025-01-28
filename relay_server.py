@@ -128,9 +128,8 @@ class RealtimeRelay:
         # already be locked to that model. It's optional to pass again in the URL.
         base_url = "wss://api.openai.com/v1/realtime"
         # For safety, specify the model if we know it:
-        model = self.session_config.get("model", None)
-        if model:
-            base_url += f"?model={model}"
+        model = "gpt-4-realtime-preview-2024-12-17"  # Use correct model name
+        base_url += f"?model={model}"
 
         headers = {
             "Authorization": f"Bearer {self.ephemeral_token}",
