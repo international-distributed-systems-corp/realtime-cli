@@ -19,25 +19,13 @@ image = (
 )
 
 # Create Modal app
-stub = App(TOOL_MGMT_APP_LABEL)
+app = App(TOOL_MGMT_APP_LABEL)
 
-# Create the FastAPI app
-app = FastAPI(title="Tool Management API", version="1.0.0")
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Import app from tool_registry.py
-from tool_registry import app
+# Import web_app from tool_registry.py
+from tool_registry import web_app
 
 # Wrap the FastAPI app with Modal
-@stub.function(
+@app.function(
     image=image,
     secrets=[Secret.from_name(NEO4J_SECRET_NAME)],
 )
