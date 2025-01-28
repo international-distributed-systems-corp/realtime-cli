@@ -483,7 +483,14 @@ async def main():
     try:
         print(f"Connecting to relay at {RELAY_SERVER_URL} ...")
         
-        async with websockets.connect(RELAY_SERVER_URL, ping_interval=None) as ws:
+        # Add connection timeout and heartbeat
+        async with websockets.connect(
+            RELAY_SERVER_URL,
+            ping_interval=20,
+            ping_timeout=10,
+            close_timeout=5,
+            max_size=10 * 1024 * 1024  # 10MB max message size
+        ) as ws:
             print("Connected to relay server")
             # Set up signal handler
             loop = asyncio.get_event_loop()

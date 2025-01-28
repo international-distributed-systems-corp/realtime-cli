@@ -162,9 +162,13 @@ async def handle_client(client_ws, tool_registry=None):
     relay = None
     try:
         print("New client connected, waiting for init message...")
-        # Step 1: Wait for session init from local
-        init_msg_str = await client_ws.recv()
-        print(f"Received init message: {init_msg_str[:100]}...")
+        # Step 1: Wait for session init from local with timeout
+        try:
+            init_msg_str = await asyncio.wait_for(client_ws.recv(), timeout=5.0)
+            print(f"Received init message: {init_msg_str[:100]}...")
+        except asyncio.TimeoutError:
+            print("Timeout waiting for init message")
+            return
         init_msg = json.loads(init_msg_str)
         
         if init_msg.get("type") != "init_session":
@@ -217,12 +221,17 @@ async def handle_client(client_ws, tool_registry=None):
             """
             while True:
                 try:
-                    data_str = await client_ws.recv()
+                    data_str = await asyncio.wait_for(client_ws.recv(), timeout=1.0)
                     data = json.loads(data_str)
                     
                     # Ensure event_id exists
                     if "event_id" not in data:
                         data["event_id"] = f"evt_{uuid.uuid4().hex[:6]}"
+                        
+                    # Add timeout to upstream send
+                    await asyncio.wait_for(relay.upstream_ws.send(json.dumps(data)), timeout=2.0)
+                except asyncio.TimeoutError:
+                    continue
                     
                     # Validate event type
                     if "type" not in data:
