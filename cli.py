@@ -253,6 +253,12 @@ def audio_callback(in_data, frame_count, time_info, status):
         
         # Always process audio when recording is active and not in RESPONDING state
         if STATE.response_state != ResponseState.RESPONDING:
+            # Store audio sample
+            STATE.audio.storage.save_sample(
+                speaker='user',
+                audio_data=in_data,
+                sample_rate=RATE
+            )
             STATE.audio.queue.put(in_data)
         
         # Update display
