@@ -5,7 +5,7 @@ import uuid
 import os
 import websockets
 import requests
-from auth.middleware import AuthMiddleware, security
+from db.database import init_db, get_user_by_api_key, record_usage
 from datetime import datetime
 from modal import Image, App, asgi_app
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
@@ -28,8 +28,8 @@ web_app = FastAPI(
     root_path_in_servers=False
 )
 
-# Initialize auth middleware
-auth = AuthMiddleware()
+# Initialize database
+init_db()
 
 # Create Modal app and image
 app = App("realtime-relay")
