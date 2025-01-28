@@ -19,7 +19,7 @@ except ImportError:
 
 # Configuration
 TOOL_MGMT_APP_LABEL = "tool_management_api"
-NEO4J_SECRET_NAME = "NEO4J_CREDENTIALS"
+NEO4J_SECRET_NAME = "distributed-systems"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # Logging setup
