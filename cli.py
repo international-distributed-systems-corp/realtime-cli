@@ -18,6 +18,7 @@ from queue import Queue, Empty
 
 from conversation_display import ConversationDisplay
 from conversation import ConversationManager
+from audio_training.storage import AudioStorage
 
 from utils import (
     console,
@@ -210,6 +211,7 @@ STATE = SessionState()
 STATE.audio.queue = Queue()  # Initialize audio queue
 STATE.audio.player = None  # Initialize player attribute
 STATE.audio.display = ConversationDisplay()  # Add display
+STATE.audio.storage = AudioStorage()  # Initialize audio storage
 STATE.conversation = ConversationManager()  # Add conversation manager
 
 # Enhanced session config
@@ -381,8 +383,16 @@ async def handle_server_events(ws):
                         STATE.audio.display.complete_current_line()
                     
                 elif event_type == "conversation.item.input_audio_transcription.completed":
-                    STATE.audio.display.update_current_text(event['transcript'])
+                    transcript = event['transcript']
+                    STATE.audio.display.update_current_text(transcript)
                     STATE.audio.display.complete_current_line()
+                    
+                    # Update last user sample with transcription
+                    if STATE.audio.storage:
+                        samples = STATE.audio.storage.get_samples_by_speaker('user')
+                        if samples:
+                            last_sample = samples[-1]
+                            STATE.audio.storage.update_transcription(last_sample.id, transcript)
                 
             except json.JSONDecodeError:
                 print(f"\nInvalid JSON: {msg_str}")
