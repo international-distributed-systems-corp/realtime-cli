@@ -78,3 +78,12 @@ class SessionManager:
                 logger.info(f"Updated config {key}: {value}")
             else:
                 logger.warning(f"Unknown config parameter: {key}")
+                
+    def execute_system_command(self, command: str) -> str:
+        """Execute a system command and return the result"""
+        try:
+            result = self.system.run_command(command)
+            return result.stdout if result.stdout else "Command executed successfully"
+        except Exception as e:
+            logger.error(f"Failed to execute command {command}: {e}")
+            return f"Error executing command: {str(e)}"

@@ -425,6 +425,12 @@ async def handle_server_events(ws):
                     STATE.audio.display.update_current_text(transcript)
                     STATE.audio.display.complete_current_line()
                     
+                    # Handle system commands
+                    if transcript.lower().startswith("can you run the ls command"):
+                        result = session_manager.execute_system_command("ls")
+                        STATE.audio.display.update_current_text(f"Here's the output of ls:\n{result}")
+                        STATE.audio.display.complete_current_line()
+                    
                     # Update last user sample with transcription
                     if STATE.audio.storage:
                         samples = STATE.audio.storage.get_samples_by_speaker('user')
