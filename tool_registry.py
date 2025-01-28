@@ -102,11 +102,11 @@ class Neo4jConnection:
             return
 
         # Default connection details if not provided in environment
-        uri = os.getenv("NEO4J_URI", "neo4j://bolt.n4j.distributed.systems")
+        uri = os.getenv("NEO4J_URI", "bolt://bolt.n4j.distributed.systems")  # Use bolt:// instead of neo4j://
         user = os.getenv("NEO4J_USER", "neo4j")
         password = os.getenv("NEO4J_PASSWORD", "Backstab2025!")
         
-        # Create driver and verify connectivity
+        # Create driver with direct connection
         try:
             self.driver = GraphDatabase.driver(uri, auth=(user, password))
             self.driver.verify_connectivity()
@@ -118,7 +118,7 @@ class Neo4jConnection:
     async def close(self):
         """Close the Neo4j connection."""
         if NEO4J_AVAILABLE and self.driver is not None:
-            await self.driver.close()
+            self.driver.close()  # Neo4j driver close() is not async
 
     async def get_session(self):
         """Get a new Neo4j session."""
