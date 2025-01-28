@@ -131,13 +131,25 @@ async def get_session(db: Neo4jConnection = Depends(get_db)):
     async with session as s:
         yield s
 
-# Creating the FastAPI application
+# Create the FastAPI app
+app = FastAPI(title="Tool Management API", version="1.0.0")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Wrap the FastAPI app with Modal
 @stub.function(
     image=image,
     secrets=[Secret.from_name(NEO4J_SECRET_NAME)],
 )
-@asgi_app(label="tools")
-def fastapi_app():
+@asgi_app()
+def app():
     """The FastAPI instance, wrapped in a Modal asgi_app."""
     app = FastAPI(title="Tool Management API", version="1.0.0")
 
