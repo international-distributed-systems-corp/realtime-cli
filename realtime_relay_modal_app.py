@@ -1,21 +1,24 @@
-import modal
-import json
-import asyncio
-import websockets
-from typing import Optional, Dict, Any
+from modal import Image, Stub, asgi_app
+from fastapi import FastAPI
+import uvicorn
+
+# Create FastAPI app
+web_app = FastAPI()
 
 # Create Modal app and image
-stub = modal.Stub("realtime-relay")
-image = modal.Image.debian_slim().pip_install("websockets", "requests")
+app = Stub("realtime-relay")
+image = (
+    Image.debian_slim()
+    .pip_install(["fastapi", "uvicorn", "websockets", "requests"])
+)
 
-@stub.function(image=image)
-@modal.web_server(9000)
-def run_relay_server():
-    """Run the WebSocket relay server using Modal"""
-    import relay_server
-    
-    # Start the relay server
-    asyncio.run(relay_server.main())
+@app.function(
+    image=image,
+    keep_warm=1
+)
+@asgi_app(label="realtime-relay")
+def fastapi_app():
+    return web_app
 
 if __name__ == "__main__":
-    stub.serve()
+    app.serve()
