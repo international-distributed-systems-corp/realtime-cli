@@ -251,10 +251,10 @@ from session_manager import SessionManager
 session_manager = SessionManager()
 
 # Audio recording settings
-CHUNK = 1024
-FORMAT = pyaudio.paInt16
+CHUNK = 2048  # Larger chunk size for better performance
+FORMAT = pyaudio.paFloat32  # Better quality on macOS
 CHANNELS = 1
-RATE = 11025  # Lower rate for better echo cancellation
+RATE = 24000  # Native rate for OpenAI
 TARGET_RATE = 24000  # OpenAI requires 24kHz
 
 def resample_audio(audio_data, from_rate, to_rate):
