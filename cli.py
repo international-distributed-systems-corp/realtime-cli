@@ -274,8 +274,8 @@ def process_audio(audio_data: bytes, from_rate: int, to_rate: int) -> bytes:
     """
     Process audio data with advanced noise reduction and resampling
     """
-    # Convert to numpy array
-    audio_array = numpy.frombuffer(audio_data, dtype=numpy.float32)
+    # Convert to numpy array and make a copy
+    audio_array = numpy.frombuffer(audio_data, dtype=numpy.float32).copy()
     
     # Apply noise reduction
     if len(audio_array) > 0:
