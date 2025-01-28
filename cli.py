@@ -258,10 +258,7 @@ DEFAULT_SESSION_CONFIG = {
         "silence_duration_ms": 500,
         "create_response": True
     },
-    "tools": {
-        "type": "registry",
-        "url": TOOL_REGISTRY_URL
-    } if TOOL_REGISTRY_URL else None
+    "tools": [] # Will be populated with available tools from registry
 }
 
 # Audio recording settings
