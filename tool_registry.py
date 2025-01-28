@@ -137,11 +137,6 @@ async def get_session(db: Neo4jConnection = Depends(get_db)):
     secrets=[Secret.from_name(NEO4J_SECRET_NAME)],
 )
 @asgi_app(label="tools")
-@stub.function(
-    image=image,
-    secrets=[Secret.from_name(NEO4J_SECRET_NAME)],
-)
-@asgi_app()
 def fastapi_app():
     """The FastAPI instance, wrapped in a Modal asgi_app."""
     app = FastAPI(title="Tool Management API", version="1.0.0")
