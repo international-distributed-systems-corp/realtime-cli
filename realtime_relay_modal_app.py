@@ -149,7 +149,7 @@ async def handle_client(websocket: WebSocket, relay: Optional[RealtimeRelay] = N
             pass
 
 @web_app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def websocket_endpoint(websocket: WebSocket):
     """Handle WebSocket connections with proper lifecycle management"""
     relay = None
     try:
@@ -162,9 +162,6 @@ async def websocket_endpoint(websocket: WebSocket, credentials: HTTPAuthorizatio
             "timestamp": str(datetime.now())
         }))
 
-        # Authenticate user
-        user = await auth.authenticate(credentials)
-        
         # Wait for init message
         data = await websocket.receive_text()
         init_msg = json.loads(data)

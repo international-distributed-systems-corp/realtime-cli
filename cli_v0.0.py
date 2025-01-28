@@ -372,7 +372,10 @@ async def main():
     try:
         print(f"Connecting to relay at {RELAY_SERVER_URL} ...")
         
-        async with websockets.connect(RELAY_SERVER_URL) as ws:
+        async with websockets.connect(
+            RELAY_SERVER_URL,
+            extra_headers={"Content-Type": "application/json"}
+        ) as ws:
             # Set up signal handler
             loop = asyncio.get_event_loop()
             loop.add_signal_handler(signal.SIGINT, lambda: asyncio.create_task(handle_interrupt(ws)))
