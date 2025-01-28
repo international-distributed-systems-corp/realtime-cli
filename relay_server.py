@@ -48,6 +48,9 @@ from tool_registry_client import ToolRegistryClient
 # Configuration
 ################################################################################
 
+# API endpoints
+TOOL_REGISTRY_URL = "https://arthurcolle--tools.modal.run"
+
 # The standard API key that can create ephemeral tokens.
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
