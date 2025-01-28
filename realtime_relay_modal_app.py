@@ -37,7 +37,7 @@ image = (
     Image.debian_slim()
     .pip_install([
         "fastapi", "uvicorn", "websockets>=12.0", "requests", "python-multipart",
-        "motor", "bcrypt", "pydantic[email]"
+        "motor>=3.3.0", "bcrypt", "pydantic[email]", "pymongo>=4.5.0"
     ])
 )
 
