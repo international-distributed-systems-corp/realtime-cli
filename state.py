@@ -25,6 +25,7 @@ class AudioState:
     sample_rate: int = 24000
     channels: int = 1
     chunk_size: int = 1024
+    storage: Any = None  # Will hold AudioStorage instance
 
 @dataclass
 class ConversationState:
