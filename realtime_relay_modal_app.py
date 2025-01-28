@@ -73,7 +73,7 @@ class RealtimeRelay:
 
 from modal import Secret
 @app.function(secrets=[Secret.from_name("distributed-systems")])
-def create_ephemeral_token(session_config: dict) -> str:
+async def create_ephemeral_token(session_config: dict) -> str:
     """Create ephemeral token for Realtime API access."""
     payload = {
         k: session_config[k]
@@ -228,7 +228,7 @@ async def websocket_endpoint(websocket: WebSocket):
         # Create relay connection
         session_config = init_msg.get("session_config", {})
         try:
-            token = create_ephemeral_token(session_config)
+            token = await create_ephemeral_token.remote(session_config)
             relay = RealtimeRelay(token, session_config)
             await relay.connect_upstream()
             
