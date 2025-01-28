@@ -17,6 +17,7 @@ import signal
 from typing import Optional, Dict, Any
 from pathlib import Path
 from queue import Queue, Empty
+from datetime import datetime
 
 from conversation_display import ConversationDisplay
 from conversation import ConversationManager
@@ -361,7 +362,7 @@ async def start_recording(ws):
         try:
             audio_data = STATE.audio.queue.get_nowait()
             # Resample from RATE to TARGET_RATE for OpenAI
-            resampled_audio = resample_audio(audio_data, RATE, TARGET_RATE)
+            resampled_audio = process_audio(audio_data, RATE, TARGET_RATE)
             event = {
                 "event_id": f"evt_{uuid.uuid4().hex[:6]}",
                 "type": "input_audio_buffer.append",
@@ -450,7 +451,7 @@ async def handle_server_events(ws):
                         event["response_id"] == STATE.current_response_id):
                         # Decode and play audio
                         # Resample from TARGET_RATE back to RATE for playback
-                        audio_data = resample_audio(
+                        audio_data = process_audio(
                             base64.b64decode(event["delta"]),
                             TARGET_RATE,
                             RATE
