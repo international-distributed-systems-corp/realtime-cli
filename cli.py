@@ -469,7 +469,7 @@ async def main():
     """Main entry point"""
     try:
         # Initialize thought analyzer
-        thought_analyzer = ThoughtAnalyzer(os.environ["OPENAI_API_KEY"])
+        thought_analyzer = ThoughtAnalyzer()
         print("Initializing thought analysis system...")
         
         print(f"Connecting to relay at {RELAY_SERVER_URL} ...")
