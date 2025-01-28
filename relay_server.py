@@ -145,6 +145,7 @@ class RealtimeRelay:
         }
 
         try:
+            logger.info(f"Connecting to {base_url}...")
             self.upstream_ws = await websockets.connect(
                 base_url,
                 extra_headers=headers,
@@ -152,14 +153,20 @@ class RealtimeRelay:
                 ping_timeout=20,
                 close_timeout=10
             )
-            logger.info("Successfully connected to OpenAI Realtime API")
+            logger.info("✓ Successfully connected to OpenAI Realtime API")
+            logger.debug(f"Connection details: ping_interval={20}s, ping_timeout={20}s")
         except Exception as e:
             logger.error(f"Failed to connect to OpenAI Realtime API: {e}")
             raise
 
     async def close(self):
         if self.upstream_ws:
-            await self.upstream_ws.close()
+            logger.info("Closing upstream WebSocket connection...")
+            try:
+                await self.upstream_ws.close()
+                logger.info("✓ Connection closed cleanly")
+            except Exception as e:
+                logger.error(f"Error closing connection: {e}")
 
 ################################################################################
 # Relay server: local <-> Realtime
@@ -184,8 +191,10 @@ async def handle_client(client_ws, tool_registry=None):
         is_connected = True
 
         # Step 1: Wait for session init from local with timeout
+        logger.info(f"[{client_id}] Waiting for session initialization...")
         try:
             init_msg_str = await asyncio.wait_for(client_ws.recv(), timeout=5.0)
+            logger.info(f"[{client_id}] Received session init message")
         except asyncio.TimeoutError:
             logger.warning(f"Session init timeout [id={client_id}]", extra={'event': 'error.timeout', 'client_id': client_id})
             return
