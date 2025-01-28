@@ -369,6 +369,8 @@ async def handle_server_events(ws):
                         if STATE.audio.player is None:
                             STATE.audio.player = AudioPlayer()
                             STATE.audio.player.start()
+                            # Ensure we're not recording while playing
+                            STATE.audio.is_recording = False
                         # Update display with output audio level
                         audio_data_np = numpy.frombuffer(audio_data, dtype=numpy.int16)
                         output_level = numpy.abs(audio_data_np).mean() / 32768.0
@@ -392,29 +394,33 @@ async def handle_server_events(ws):
                         STATE.audio.is_recording = True
                         
                 elif event_type == "input_audio_buffer.speech_started":
-                    # Stop current response and playback when speech detected
-                    if STATE.response_state == ResponseState.RESPONDING:
-                        # Clear audio queue and stop playback
-                        while not STATE.audio.output_queue.empty():
-                            STATE.audio.output_queue.get()
-                        if STATE.audio.player:
-                            STATE.audio.player.stop()
-                            STATE.audio.player = None
+                    # Only handle speech if we're not already processing
+                    if STATE.response_state != ResponseState.PROCESSING:
+                        # Stop current response and playback when speech detected
+                        if STATE.response_state == ResponseState.RESPONDING:
+                            # Clear audio queue and stop playback
+                            while not STATE.audio.output_queue.empty():
+                                STATE.audio.output_queue.get()
+                            if STATE.audio.player:
+                                STATE.audio.player.stop()
+                                STATE.audio.player = None
+                                
+                            # Cancel current response
+                            cancel_event = {
+                                "event_id": f"evt_{uuid.uuid4().hex[:6]}",
+                                "type": "response.cancel",
+                                "response_id": STATE.current_response_id
+                            }
+                            await ws.send(json.dumps(cancel_event))
                             
-                        # Cancel current response
-                        cancel_event = {
-                            "event_id": f"evt_{uuid.uuid4().hex[:6]}",
-                            "type": "response.cancel",
-                            "response_id": STATE.current_response_id
-                        }
-                        await ws.send(json.dumps(cancel_event))
-                        
-                        # Reset state
-                        STATE.current_response_id = None
-                        STATE.response_state = ResponseState.IDLE
-                        
-                    STATE.response_state = ResponseState.PROCESSING
-                    STATE.audio.display.start_user_speech()
+                            # Reset state
+                            STATE.current_response_id = None
+                            STATE.response_state = ResponseState.IDLE
+                            
+                        STATE.response_state = ResponseState.PROCESSING
+                        STATE.audio.display.start_user_speech()
+                        # Resume recording
+                        STATE.audio.is_recording = True
                     
                 elif event_type == "input_audio_buffer.speech_stopped":
                     if STATE.audio.display.current_line:
