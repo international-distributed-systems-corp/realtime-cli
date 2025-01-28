@@ -255,8 +255,10 @@ RATE = 24000  # OpenAI requires 24kHz sample rate for PCM16
 
 def audio_callback(in_data, frame_count, time_info, status):
     """Callback for audio recording"""
-    if STATE.audio.is_recording and hasattr(STATE.audio, 'queue'):
-        # Just queue the audio data for sending
+    if STATE.audio.is_recording:
+        # Always queue the audio data for sending
+        if not hasattr(STATE.audio, 'queue'):
+            STATE.audio.queue = Queue()
         STATE.audio.queue.put(in_data)
         
         # Basic visualization only
@@ -270,6 +272,9 @@ def audio_callback(in_data, frame_count, time_info, status):
 
 async def start_recording(ws):
     """Start recording and streaming audio"""
+    if not hasattr(STATE.audio, 'queue'):
+        STATE.audio.queue = Queue()
+    
     STATE.audio.is_recording = True
     p = pyaudio.PyAudio()
     stream = p.open(format=FORMAT,
@@ -279,6 +284,7 @@ async def start_recording(ws):
                    frames_per_buffer=CHUNK,
                    stream_callback=audio_callback)
     stream.start_stream()
+    logger.info("Recording started")
     
     # Stream audio buffers
     while STATE.audio.is_recording:
@@ -377,8 +383,13 @@ async def handle_server_events(ws):
                             await asyncio.sleep(0.3)  # Additional cooldown
                             STATE.audio.player.stop()
                             STATE.audio.player = None
-                        # Only resume recording after output level drops
+                        # Resume recording
                         STATE.audio.is_recording = True
+                        # Ensure recording actually starts
+                        if not hasattr(STATE.audio, 'queue'):
+                            STATE.audio.queue = Queue()
+                        if not STATE.audio.queue:
+                            STATE.audio.queue = Queue()
                         
                 elif event_type == "input_audio_buffer.speech_started":
                     STATE.response_state = ResponseState.PROCESSING
