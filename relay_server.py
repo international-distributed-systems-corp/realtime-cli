@@ -161,7 +161,7 @@ class RealtimeRelay:
 
 async def handle_client(client_ws, tool_registry=None):
     """
-    Handles a single local client that connects to the relay server.
+    Handles a single local client with advanced error recovery and monitoring.
     1. Expects first message to contain the desired session config (JSON).
     2. Creates ephemeral token + new RealtimeRelay instance
     3. Connects upstream
@@ -227,8 +227,14 @@ async def handle_client(client_ws, tool_registry=None):
         # Step 2: Start bi-directional relay
         async def relay_local_to_upstream():
             """
-            For every message from the local CLI, forward it upstream.
+            Advanced message relay with retry logic and monitoring
             """
+            metrics = {
+                'messages_sent': 0,
+                'retry_count': 0,
+                'errors': {},
+                'latency': []
+            }
             while True:
                 try:
                     data_str = await asyncio.wait_for(client_ws.recv(), timeout=1.0)

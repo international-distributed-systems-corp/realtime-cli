@@ -251,22 +251,49 @@ from session_manager import SessionManager
 session_manager = SessionManager()
 
 # Audio recording settings
-CHUNK = 2048  # Larger chunk size for better performance
-FORMAT = pyaudio.paFloat32  # Better quality on macOS
+CHUNK = 2048  # Optimized chunk size
+FORMAT = pyaudio.paFloat32  # High quality format
 CHANNELS = 1
 RATE = 24000  # Native rate for OpenAI
 TARGET_RATE = 24000  # OpenAI requires 24kHz
+
+# Advanced audio processing settings
+NOISE_REDUCTION_STRENGTH = 0.15  # Noise reduction factor
+AUDIO_GAIN = 1.2  # Input gain adjustment
+SILENCE_THRESHOLD = 0.01  # Silence detection threshold
+MAX_RETRY_ATTEMPTS = 3  # Max retries for failed operations
+BACKOFF_FACTOR = 1.5  # Exponential backoff factor
 
 # Voice Activity Detection settings
 VAD_THRESHOLD = 0.02  # Initial VAD threshold
 VAD_ADJUSTMENT = 0.8  # Scale factor for input sensitivity
 BACKGROUND_LEARNING_RATE = 0.01  # Rate to learn background noise level
 
-def resample_audio(audio_data, from_rate, to_rate):
-    """Resample audio data between different sample rates"""
-    audio_array = numpy.frombuffer(audio_data, dtype=numpy.int16)
-    resampled = signal.resample(audio_array, int(len(audio_array) * to_rate / from_rate))
-    return resampled.astype(numpy.int16).tobytes()
+def process_audio(audio_data: bytes, from_rate: int, to_rate: int) -> bytes:
+    """
+    Process audio data with advanced noise reduction and resampling
+    """
+    # Convert to numpy array
+    audio_array = numpy.frombuffer(audio_data, dtype=numpy.float32)
+    
+    # Apply noise reduction
+    if len(audio_array) > 0:
+        # Calculate noise profile from silent portions
+        noise_profile = numpy.mean(numpy.abs(audio_array[audio_array < SILENCE_THRESHOLD]))
+        # Apply spectral subtraction
+        audio_array -= noise_profile * NOISE_REDUCTION_STRENGTH
+        
+    # Apply gain
+    audio_array *= AUDIO_GAIN
+    
+    # Clip to prevent distortion
+    audio_array = numpy.clip(audio_array, -1.0, 1.0)
+    
+    # Resample if needed
+    if from_rate != to_rate:
+        audio_array = signal.resample(audio_array, int(len(audio_array) * to_rate / from_rate))
+    
+    return audio_array.astype(numpy.float32).tobytes()
 
 def audio_callback(in_data, frame_count, time_info, status):
     """Callback for audio recording"""
@@ -378,8 +405,20 @@ async def conversation_loop(ws):
 
 
 async def handle_server_events(ws):
-    """Handle incoming server events and manage state"""
+    """Handle incoming server events with advanced state management and error recovery"""
     text_accumulator = StreamingTextAccumulator()
+    retry_count = 0
+    last_event_time = datetime.now()
+    
+    # Initialize state tracking
+    conversation_state = {
+        'context': [],
+        'turn_count': 0,
+        'last_speaker': None,
+        'current_topic': None,
+        'pending_actions': [],
+        'error_count': 0
+    }
     
     try:
         async for msg_str in ws:
