@@ -504,7 +504,17 @@ async def main():
             context = {
                 "audio_enabled": True,
                 "available_tools": session_manager.get_available_tools(),
-                "current_state": STATE.__dict__
+                "current_state": {
+                    "audio": {
+                        "is_recording": STATE.audio.is_recording,
+                        "is_playing": getattr(STATE.audio, "is_playing", False),
+                        "channels": getattr(STATE.audio, "channels", CHANNELS),
+                        "sample_rate": getattr(STATE.audio, "sample_rate", RATE),
+                        "chunk_size": getattr(STATE.audio, "chunk_size", CHUNK)
+                    },
+                    "response_state": STATE.response_state.value if STATE.response_state else None,
+                    "current_response_id": STATE.current_response_id
+                }
             }
             
             # Analyze initial state
