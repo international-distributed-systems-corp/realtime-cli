@@ -36,10 +36,10 @@ from visualizer import AudioVisualizer
 from events import EventHandler, EventType
 from state import SessionState, ResponseState, AudioState
 
-# Configure logging
+# Configure minimal logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.WARNING,
+    format='%(levelname)s: %(message)s'
 )
 logger = logging.getLogger(__name__)
 
