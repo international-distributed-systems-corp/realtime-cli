@@ -95,19 +95,14 @@ class Neo4jConnection:
         self.driver = None
         if not NEO4J_AVAILABLE:
             logger.warning("Neo4j driver not installed. Some functionalities are disabled.")
-
-    async def connect(self):
-        """Establish connection to Neo4j database."""
-        if not NEO4J_AVAILABLE:
             return
-
-        # Default connection details if not provided in environment
-        uri = os.getenv("NEO4J_URI", "neo4j://bolt.n4j.distributed.systems")
-        user = os.getenv("NEO4J_USER", "neo4j")
-        password = os.getenv("NEO4J_PASSWORD", "Backstab2025!")
+            
+        # Connection details
+        uri = "neo4j://bolt.n4j.distributed.systems"
+        auth = ("neo4j", "Backstab2025!")
         
         try:
-            self.driver = GraphDatabase.driver(uri, auth=(user, password))
+            self.driver = GraphDatabase.driver(uri, auth=auth)
             # Verify connectivity synchronously
             self.driver.verify_connectivity()
             logger.info("Neo4j connection established successfully")
