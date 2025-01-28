@@ -240,26 +240,10 @@ STATE.audio.display = ConversationDisplay()  # Add display
 STATE.audio.storage = AudioStorage()  # Initialize audio storage
 STATE.conversation = ConversationManager()  # Add conversation manager
 
-# Enhanced session config
-DEFAULT_SESSION_CONFIG = {
-    "model": "gpt-4o-realtime-preview-2024-12-17",
-    "modalities": ["text", "audio"],
-    "instructions": "You are a friendly assistant.",
-    "voice": "alloy",
-    "input_audio_format": "pcm16",  # 24kHz, mono, 16-bit PCM, little-endian
-    "output_audio_format": "pcm16",  # 24kHz sample rate
-    "input_audio_transcription": {
-        "model": "whisper-1"
-    },
-    "turn_detection": {
-        "type": "server_vad",
-        "threshold": 0.5,
-        "prefix_padding_ms": 300,
-        "silence_duration_ms": 500,
-        "create_response": True
-    },
-    "tools": [] # Will be populated with available tools from registry
-}
+from session_manager import SessionManager
+
+# Initialize session manager
+session_manager = SessionManager()
 
 # Audio recording settings
 CHUNK = 1024
@@ -466,10 +450,10 @@ async def main():
             loop = asyncio.get_event_loop()
             loop.add_signal_handler(signal.SIGINT, lambda: asyncio.create_task(handle_interrupt(ws)))
             
-            # Initialize session
+            # Initialize session with dynamic config
             init_msg = {
                 "type": "init_session",
-                "session_config": DEFAULT_SESSION_CONFIG
+                "session_config": session_manager.get_config()
             }
             await ws.send(json.dumps(init_msg))
             

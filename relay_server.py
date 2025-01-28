@@ -183,12 +183,11 @@ async def handle_client(client_ws):
         relay = RealtimeRelay(ephemeral_token, session_config)
         await relay.connect_upstream()
 
-        # Load and format available tools
+        # Load available tools and update session config
         tools = await tool_registry.list_tools()
         if tools:
-            session_config["tools"] = tools
-        else:
-            session_config["tools"] = []
+            for tool in tools:
+                session_config.setdefault("tools", []).append(tool)
         
         # Step 2: Start bi-directional relay
         async def relay_local_to_upstream():
