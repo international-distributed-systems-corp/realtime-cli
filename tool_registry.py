@@ -11,12 +11,12 @@ from modal import App, Image, Secret, asgi_app
 
 # Try to import Neo4j
 try:
-    from neo4j import AsyncGraphDatabase
+    from neo4j import GraphDatabase
     NEO4J_AVAILABLE = True
 except ImportError:
     print("Warning: Neo4j driver not installed. Some functionality may be limited.")
     NEO4J_AVAILABLE = False
-    AsyncGraphDatabase = None
+    GraphDatabase = None
 
 # Configuration
 TOOL_MGMT_APP_LABEL = "tool_management_api"
@@ -106,10 +106,10 @@ class Neo4jConnection:
         user = os.getenv("NEO4J_USER", "neo4j")
         password = os.getenv("NEO4J_PASSWORD", "Backstab2025!")
         
-        # Verify we can connect
+        # Create driver and verify connectivity
         try:
-            self.driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
-            await self.driver.verify_connectivity()
+            self.driver = GraphDatabase.driver(uri, auth=(user, password))
+            self.driver.verify_connectivity()
             logger.info("Neo4j connection established successfully")
         except Exception as e:
             logger.error(f"Failed to connect to Neo4j: {str(e)}")
