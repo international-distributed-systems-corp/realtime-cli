@@ -251,6 +251,26 @@ from session_manager import SessionManager
 # Initialize session manager
 session_manager = SessionManager()
 
+# Enhanced session config
+DEFAULT_SESSION_CONFIG = {
+    "model": "gpt-4",
+    "modalities": ["text", "audio"],
+    "instructions": "You are a friendly assistant.",
+    "voice": "alloy", 
+    "input_audio_format": "pcm16",  # 24kHz, mono, 16-bit PCM, little-endian
+    "output_audio_format": "pcm16",  # 24kHz sample rate
+    "input_audio_transcription": {
+        "model": "whisper-1"
+    },
+    "turn_detection": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "prefix_padding_ms": 300,
+        "silence_duration_ms": 500,
+        "create_response": True
+    }
+}
+
 # Audio recording settings
 CHUNK = 2048  # Optimized chunk size
 FORMAT = pyaudio.paFloat32  # High quality format
