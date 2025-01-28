@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from modal import Image, Stub, asgi_app
+from modal import Image, App, asgi_app
 from fastapi import FastAPI
 import uvicorn
 from relay_server import RealtimeRelay, create_ephemeral_token
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 web_app = FastAPI()
 
 # Create Modal app and image
-app = Stub("realtime-relay", shared_volumes={})
+app = App("realtime-relay")
 image = (
     Image.debian_slim()
     .pip_install(["fastapi", "uvicorn", "websockets", "requests"])
