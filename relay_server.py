@@ -91,7 +91,7 @@ class RealtimeRelay:
         }
 
         print(f"Connecting upstream to {base_url} ...")
-        self.upstream_ws = await websockets.connect(base_url, extra_headers=headers)
+        self.upstream_ws = await websockets.connect(base_url, additional_headers=headers)
         print("Upstream connected.")
 
     async def close(self):
