@@ -41,14 +41,53 @@ async def test_connection():
         logger.error(f"✗ Connection test failed: {e}")
         return False
 
+from fastapi import WebSocket, WebSocketDisconnect
+from typing import List
+
+# Keep track of active connections
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+manager = ConnectionManager()
+
+@web_app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            event = json.loads(data)
+            
+            # Handle session initialization
+            if event.get("type") == "init_session":
+                # Test connection at startup
+                await test_connection()
+                
+            # Forward event to client
+            await websocket.send_text(json.dumps(event))
+            
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        if websocket in manager.active_connections:
+            manager.disconnect(websocket)
+
 @app.function(
     image=image,
-    keep_warm=1
+    keep_warm=1,
+    allow_concurrent_inputs=True  # Allow multiple WebSocket connections
 )
 @asgi_app(label="realtime-relay")
 def fastapi_app():
-    # Test connection at startup
-    asyncio.run(test_connection())
     return web_app
 
 if __name__ == "__main__":
