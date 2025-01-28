@@ -204,6 +204,28 @@ class AudioManager:
         self.p.terminate()
 
 # Configuration
+################################################################################
+
+# Required environment variables
+REQUIRED_ENV_VARS = {
+    "OPENAI_API_KEY": "OpenAI API key for creating ephemeral tokens",
+    "TOOL_REGISTRY_URL": "URL of the Tool Registry service",
+}
+
+# Check for required environment variables
+missing_vars = []
+for var, description in REQUIRED_ENV_VARS.items():
+    if not os.environ.get(var):
+        missing_vars.append(f"{var} - {description}")
+
+if missing_vars:
+    print("Error: Missing required environment variables:")
+    for var in missing_vars:
+        print(f"- {var}")
+    exit(1)
+
+# Initialize configurations
+TOOL_REGISTRY_URL = os.environ["TOOL_REGISTRY_URL"]
 RELAY_SERVER_URL = "ws://localhost:9000"
 AUDIO_CHUNK = 1024
 FORMAT = pyaudio.paFloat32
