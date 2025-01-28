@@ -2,11 +2,13 @@ import asyncio
 import json
 import logging
 import uuid
+import os
+import websockets
+import requests
 from datetime import datetime
 from modal import Image, App, asgi_app
-from fastapi import FastAPI
-import uvicorn
-from relay_server import RealtimeRelay, create_ephemeral_token
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from typing import List, Optional
 
 # Configure logging
 logging.basicConfig(
@@ -18,16 +20,11 @@ logger = logging.getLogger(__name__)
 # Create FastAPI app with WebSocket support
 web_app = FastAPI(
     title="Realtime Relay",
-    description="WebSocket relay for realtime communication",
+    description="WebSocket relay for realtime communication", 
     version="1.0.0",
     root_path="",
     root_path_in_servers=False
 )
-
-@web_app.get("/")
-async def root():
-    """Health check endpoint"""
-    return {"status": "ok", "websocket_path": "/ws"}
 
 # Create Modal app and image
 app = App("realtime-relay")
@@ -36,29 +33,64 @@ image = (
     .pip_install(["fastapi", "uvicorn", "websockets>=12.0", "requests", "python-multipart"])
 )
 
-async def test_connection():
-    """Test connection to OpenAI Realtime API"""
-    logger.info("Testing connection to OpenAI Realtime API...")
-    try:
-        # Create minimal session config for test
-        test_config = {
-            "model": "gpt-4",
-            "modalities": ["text"]
+class RealtimeRelay:
+    """
+    Manages a single upstream connection to the OpenAI Realtime API.
+    """
+    def __init__(self, ephemeral_token: str, session_config: dict):
+        self.ephemeral_token = ephemeral_token
+        self.session_config = session_config
+        self.upstream_ws = None
+
+    async def connect_upstream(self):
+        """Connect to the Realtime API over WebSocket using ephemeral token."""
+        base_url = "wss://api.openai.com/v1/realtime"
+        model = self.session_config.get("model", None)
+        if model:
+            base_url += f"?model={model}"
+
+        headers = {
+            "Authorization": f"Bearer {self.ephemeral_token}",
+            "OpenAI-Beta": "realtime=v1"
         }
-        token = create_ephemeral_token(test_config)
-        relay = RealtimeRelay(token, test_config)
-        await relay.connect_upstream()
-        await relay.close()
-        logger.info("✓ Connection test successful")
-        return True
-    except Exception as e:
-        logger.error(f"✗ Connection test failed: {e}")
-        return False
 
-from fastapi import WebSocket, WebSocketDisconnect
-from typing import List
+        logger.info(f"Connecting upstream to {base_url} ...")
+        self.upstream_ws = await websockets.connect(base_url, additional_headers=headers)
+        logger.info("Upstream connected.")
 
-# Keep track of active connections
+    async def close(self):
+        if self.upstream_ws:
+            await self.upstream_ws.close()
+
+from modal import Secret
+@app.function(secrets=[Secret.from_name("distributed-systems")])
+def create_ephemeral_token(session_config: dict) -> str:
+    """Create ephemeral token for Realtime API access."""
+    payload = {
+        k: session_config[k]
+        for k in [
+            "model", "modalities", "instructions", "voice",
+            "input_audio_format", "output_audio_format",
+            "input_audio_transcription", "turn_detection",
+            "tools", "tool_choice", "temperature",
+            "max_response_output_tokens"
+        ]
+        if k in session_config
+    }
+    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    url = "https://api.openai.com/v1/realtime/sessions"
+    headers = {
+        "Authorization": f"Bearer {openai_api_key}",
+        "Content-Type": "application/json",
+        "OpenAI-Beta": "realtime=v1"
+    }
+
+    resp = requests.post(url, headers=headers, json=payload)
+    if resp.status_code != 200:
+        raise RuntimeError(f"Failed ephemeral token: {resp.text}")
+    data = resp.json()
+    return data["client_secret"]["value"]
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -72,62 +104,34 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-@web_app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """Handle WebSocket connections with proper lifecycle management"""
+async def handle_client(websocket: WebSocket, relay: Optional[RealtimeRelay] = None):
+    """Handle bi-directional relay between client and OpenAI."""
     try:
-        await websocket.accept()
-        logger.info("New WebSocket connection accepted")
-        
-        # Send immediate connection acknowledgment
-        await websocket.send_text(json.dumps({
-            "type": "connection.established",
-            "timestamp": str(datetime.now())
-        }))
-        
-        while True:
+        async def relay_local_to_upstream():
+            while True:
+                data_str = await websocket.receive_text()
+                data = json.loads(data_str)
+                if "event_id" not in data:
+                    data["event_id"] = f"evt_{uuid.uuid4().hex[:6]}"
+                await relay.upstream_ws.send(json.dumps(data))
+
+        async def relay_upstream_to_local():
             try:
-                # Use shorter timeout to maintain connection
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
-                event = json.loads(data)
-                
-                # Handle session initialization
-                if event.get("type") == "init_session":
-                    # Test connection at startup
-                    connection_ok = await test_connection()
-                    if connection_ok:
-                        logger.info("Session initialized successfully")
-                        await websocket.send_text(json.dumps({
-                            "type": "session.created",
-                            "session_id": str(uuid.uuid4()),
-                            "status": "ready"
-                        }))
-                    else:
-                        logger.error("Failed to initialize session")
-                        await websocket.send_text(json.dumps({
-                            "type": "error",
-                            "error": {
-                                "code": "session_init_failed",
-                                "message": "Failed to establish OpenAI connection"
-                            }
-                        }))
-                        break  # Exit on failed initialization
-                else:
-                    # Echo back other events
-                    await websocket.send_text(json.dumps(event))
-                    
-            except asyncio.TimeoutError:
-                # Send ping to keep connection alive
-                try:
-                    await websocket.send_text(json.dumps({"type": "ping"}))
-                except:
-                    logger.warning("Failed to send ping, closing connection")
-                    break
-                
-    except WebSocketDisconnect:
-        logger.info("Client disconnected normally")
+                async for data_str in relay.upstream_ws:
+                    await websocket.send_text(data_str)
+            except websockets.ConnectionClosed:
+                pass
+
+        done, pending = await asyncio.wait(
+            [asyncio.create_task(relay_local_to_upstream()),
+             asyncio.create_task(relay_upstream_to_local())],
+            return_when=asyncio.FIRST_EXCEPTION
+        )
+        for task in pending:
+            task.cancel()
+
     except Exception as e:
-        logger.error(f"WebSocket error: {str(e)}")
+        logger.error(f"Relay error: {e}")
         try:
             await websocket.send_text(json.dumps({
                 "type": "error",
@@ -135,17 +139,72 @@ async def websocket_endpoint(websocket: WebSocket):
             }))
         except:
             pass
+
+@web_app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """Handle WebSocket connections with proper lifecycle management"""
+    relay = None
+    try:
+        await websocket.accept()
+        logger.info("New WebSocket connection accepted")
+
+        # Send connection acknowledgment
+        await websocket.send_text(json.dumps({
+            "type": "connection.established",
+            "timestamp": str(datetime.now())
+        }))
+
+        # Wait for init message
+        data = await websocket.receive_text()
+        init_msg = json.loads(data)
+
+        if init_msg.get("type") != "init_session":
+            await websocket.send_text(json.dumps({
+                "type": "error",
+                "error": {
+                    "code": "invalid_init",
+                    "message": "First message must be init_session"
+                }
+            }))
+            return
+
+        # Create relay connection
+        session_config = init_msg.get("session_config", {})
+        try:
+            token = create_ephemeral_token(session_config)
+            relay = RealtimeRelay(token, session_config)
+            await relay.connect_upstream()
+            
+            # Start bi-directional relay
+            await handle_client(websocket, relay)
+
+        except Exception as e:
+            logger.error(f"Failed to initialize relay: {e}")
+            await websocket.send_text(json.dumps({
+                "type": "error",
+                "error": {
+                    "code": "relay_init_failed",
+                    "message": str(e)
+                }
+            }))
+
+    except WebSocketDisconnect:
+        logger.info("Client disconnected normally")
+    except Exception as e:
+        logger.error(f"WebSocket error: {str(e)}")
     finally:
+        if relay:
+            await relay.close()
         logger.info("Cleaning up WebSocket connection")
 
 @app.function(
     image=image,
     keep_warm=1,
-    allow_concurrent_inputs=True,  # Allow multiple WebSocket connections
-    timeout=600,  # 10 minute timeout for long-running WebSocket connections
-    container_idle_timeout=300,  # Keep container alive for 5 minutes after last request
+    allow_concurrent_inputs=True,
+    timeout=600,
+    container_idle_timeout=300,
 )
-@asgi_app()
+@asgi_app(label="realtime-relay")
 def fastapi_app():
     """ASGI app for handling WebSocket connections"""
     return web_app
