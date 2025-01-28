@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 import logging
 from system_tools import SystemTools
+from token_processor import TokenProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +47,13 @@ class SessionManager:
         self._active_tools: Dict[str, Dict[str, Any]] = {}
         self._tool_handlers: Dict[str, callable] = {}
         self.system = SystemTools()  # Initialize system tools
+        self.token_processor = TokenProcessor()  # Initialize token processor
         
         # Register built-in tools
         self._register_builtin_tools()
+        
+        # Register some example token triggers
+        self._register_builtin_triggers()
         
     def _register_builtin_tools(self):
         """Register built-in system tools"""
@@ -162,3 +167,38 @@ class SessionManager:
         except Exception as e:
             logger.error(f"Tool {name} failed: {str(e)}")
             raise
+            
+    def _register_builtin_triggers(self):
+        """Register built-in token triggers"""
+        # Example: Trigger on "execute {tool_name}"
+        self.token_processor.register_trigger(
+            pattern=r"execute (\w+)",
+            handler=lambda match: self.execute_tool(match.group(1), {}),
+            description="Execute tool by name",
+            priority=1
+        )
+        
+        # Example: Trigger on "list tools"
+        self.token_processor.register_trigger(
+            pattern=r"list tools",
+            handler=lambda _: print("\n".join(self._active_tools.keys())),
+            description="List available tools",
+            priority=1
+        )
+        
+    def register_token_trigger(self,
+                             pattern: str,
+                             handler: Callable,
+                             description: str,
+                             priority: int = 0) -> None:
+        """Register a new token trigger"""
+        self.token_processor.register_trigger(
+            pattern=pattern,
+            handler=handler,
+            description=description,
+            priority=priority
+        )
+        
+    def process_tokens(self, tokens: List[str]) -> None:
+        """Process tokens through registered triggers"""
+        self.token_processor.process_tokens(tokens)
