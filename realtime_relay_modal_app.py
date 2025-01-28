@@ -16,7 +16,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Create FastAPI app with WebSocket support
-web_app = FastAPI()
+web_app = FastAPI(
+    title="Realtime Relay",
+    description="WebSocket relay for realtime communication",
+    version="1.0.0"
+)
+
+@web_app.get("/")
+async def root():
+    """Health check endpoint"""
+    return {"status": "ok", "websocket_path": "/ws"}
 
 # Create Modal app and image
 app = App("realtime-relay")
