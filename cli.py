@@ -258,7 +258,7 @@ DEFAULT_SESSION_CONFIG = {
     "model": "gpt-4o-realtime",
     "modalities": ["text", "audio"],
     "instructions": "You are a friendly assistant.",
-    "voice": "alloy", 
+    "voice": "verse", 
     "input_audio_format": "pcm16",  # 24kHz, mono, 16-bit PCM, little-endian
     "output_audio_format": "pcm16",  # 24kHz sample rate
     "input_audio_transcription": {
