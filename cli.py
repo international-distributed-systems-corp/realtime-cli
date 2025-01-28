@@ -16,6 +16,8 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 from queue import Queue, Empty
 
+from visualizer import AudioVisualizer
+
 from utils import (
     console,
     print_event,
@@ -206,6 +208,7 @@ RATE = 24000  # OpenAI requires 24kHz sample rate for PCM16
 STATE = SessionState()
 STATE.audio.queue = Queue()  # Initialize audio queue
 STATE.audio.player = None  # Initialize player attribute
+STATE.audio.visualizer = AudioVisualizer()  # Add visualizer
 
 # Enhanced session config
 DEFAULT_SESSION_CONFIG = {
@@ -236,13 +239,17 @@ RATE = 24000  # OpenAI requires 24kHz sample rate for PCM16
 def audio_callback(in_data, frame_count, time_info, status):
     """Callback for audio recording"""
     if STATE.audio.is_recording and hasattr(STATE.audio, 'queue'):
+        # Update visualizer with input audio
+        STATE.audio.visualizer.update_input_level(in_data)
+        
         # Don't record while AI is speaking
         if STATE.response_state != ResponseState.RESPONDING:
             STATE.audio.queue.put(in_data)
+            
+        # Print visualization
+        print(STATE.audio.visualizer.get_visualization(), end='', flush=True)
+        
     return (in_data, pyaudio.paContinue)
-
-# Audio ducking configuration
-DUCK_RATIO = 0.3  # Reduce input volume to 30% while AI speaks
 
 async def start_recording(ws):
     """Start recording and streaming audio"""
@@ -333,6 +340,8 @@ async def handle_server_events(ws):
                         if STATE.audio.player is None:
                             STATE.audio.player = AudioPlayer()
                             STATE.audio.player.start()
+                        # Update visualizer with output audio
+                        STATE.audio.visualizer.update_output_level(audio_data)
                         STATE.audio.player.play(audio_data)
                         
                 elif event_type == "response.done":
