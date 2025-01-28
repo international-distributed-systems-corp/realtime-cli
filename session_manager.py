@@ -33,7 +33,31 @@ class SessionManager:
     def __init__(self):
         self.config = SessionConfig()
         self._active_tools: Dict[str, Dict[str, Any]] = {}
+        self._tool_handlers: Dict[str, callable] = {}
         self.system = SystemTools()  # Initialize system tools
+        
+        # Register built-in tools
+        self._register_builtin_tools()
+        
+    def _register_builtin_tools(self):
+        """Register built-in system tools"""
+        self.register_tool(
+            "file_read",
+            "Read contents of a file",
+            lambda args: self.system.read_file(args["path"])
+        )
+        
+        self.register_tool(
+            "file_write", 
+            "Write content to a file",
+            lambda args: self.system.write_file(args["path"], args["content"])
+        )
+        
+        self.register_tool(
+            "list_directory",
+            "List contents of a directory",
+            lambda args: self.system.list_directory(args.get("path"))
+        )
         
     def update_system_prompt(self, prompt: str) -> None:
         """Update the system instructions"""
@@ -82,8 +106,48 @@ class SessionManager:
     def execute_system_command(self, command: str) -> str:
         """Execute a system command and return the result"""
         try:
+            # Validate command for safety
+            if any(unsafe in command.lower() for unsafe in ['rm -rf', 'mkfs', '> /dev']):
+                raise ValueError("Unsafe command detected")
+                
             result = self.system.run_command(command)
-            return result.stdout if result.stdout else "Command executed successfully"
+            output = result.stdout if result.stdout else "Command executed successfully"
+            logger.info(f"Executed command: {command}")
+            return output
         except Exception as e:
             logger.error(f"Failed to execute command {command}: {e}")
             return f"Error executing command: {str(e)}"
+            
+    def register_tool(self, name: str, description: str, handler: callable) -> None:
+        """Register a new tool with custom handler"""
+        tool = {
+            "type": "function",
+            "name": name,
+            "description": description,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "args": {
+                        "type": "object",
+                        "description": "Arguments for the tool"
+                    }
+                }
+            }
+        }
+        self._tool_handlers[name] = handler
+        self.add_tool(tool)
+        logger.info(f"Registered tool: {name}")
+        
+    def execute_tool(self, name: str, args: Dict[str, Any]) -> Any:
+        """Execute a registered tool"""
+        if name not in self._tool_handlers:
+            raise ValueError(f"Tool {name} not registered")
+            
+        handler = self._tool_handlers[name]
+        try:
+            result = handler(args)
+            logger.info(f"Tool {name} executed successfully")
+            return result
+        except Exception as e:
+            logger.error(f"Tool {name} failed: {str(e)}")
+            raise

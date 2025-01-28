@@ -431,11 +431,35 @@ async def handle_server_events(ws):
                     STATE.audio.display.update_current_text(transcript)
                     STATE.audio.display.complete_current_line()
                     
-                    # Handle system commands
-                    if transcript.lower().startswith("can you run the ls command"):
-                        result = session_manager.execute_system_command("ls")
-                        STATE.audio.display.update_current_text(f"Here's the output of ls:\n{result}")
-                        STATE.audio.display.complete_current_line()
+                    # Handle system commands and tool execution
+                    if transcript.lower().startswith(("can you", "please", "would you")):
+                        try:
+                            # Extract command/request
+                            request = transcript.lower()
+                            
+                            # Handle file operations
+                            if "show" in request and "contents" in request:
+                                path = request.split("contents of")[-1].strip()
+                                result = session_manager.execute_tool("file_read", {"path": path})
+                                STATE.audio.display.update_current_text(f"Contents of {path}:\n{result}")
+                            
+                            # Handle directory listing
+                            elif any(x in request for x in ["list", "show", "what's in"]):
+                                path = "." if "this directory" in request else request.split("in")[-1].strip()
+                                result = session_manager.execute_tool("list_directory", {"path": path})
+                                STATE.audio.display.update_current_text(f"Directory contents:\n{', '.join(result)}")
+                            
+                            # Handle direct system commands
+                            elif "run" in request and "command" in request:
+                                cmd = request.split("command")[-1].strip()
+                                result = session_manager.execute_system_command(cmd)
+                                STATE.audio.display.update_current_text(f"Command output:\n{result}")
+                                
+                            STATE.audio.display.complete_current_line()
+                            
+                        except Exception as e:
+                            STATE.audio.display.update_current_text(f"Error: {str(e)}")
+                            STATE.audio.display.complete_current_line()
                     
                     # Update last user sample with transcription
                     if STATE.audio.storage:
