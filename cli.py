@@ -565,10 +565,10 @@ async def handle_server_events(ws):
                     STATE.audio.display.complete_current_line()
                     
                     # Handle system commands and tool execution
-                    if transcript.lower().startswith(("can you", "please", "would you")):
+                    if transcript_text.lower().startswith(("can you", "please", "would you")):
                         try:
                             # Extract command/request
-                            request = transcript.lower()
+                            request = transcript_text.lower()
                             
                             # Handle file operations
                             if "show" in request and "contents" in request:

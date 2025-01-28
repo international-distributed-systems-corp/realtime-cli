@@ -96,8 +96,7 @@ def create_ephemeral_token(session_config: dict) -> str:
     url = "https://api.openai.com/v1/realtime/sessions"
     headers = {
         "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json",
-        "OpenAI-Beta": "realtime=v1"
+        "Content-Type": "application/json"
     }
     
     resp = requests.post(url, headers=headers, json=payload)
@@ -141,15 +140,11 @@ class RealtimeRelay:
         # We can append "?model=..." if not specified in the session config.
         # But if session_config includes "model", the ephemeral session should
         # already be locked to that model. It's optional to pass again in the URL.
-        base_url = "wss://api.openai.com/v1/realtime"
-        # For safety, specify the model if we know it:
-        model = self.session_config.get("model", None)
-        if model:
-            base_url += f"?model={model}"
+        base_url = "wss://realtime.openai.com/v1/chat"
 
         headers = {
             "Authorization": f"Bearer {self.ephemeral_token}",
-            "OpenAI-Beta": "realtime=v1"
+            "Content-Type": "application/json"
         }
 
         self.upstream_ws = await websockets.connect(base_url, additional_headers=headers)
