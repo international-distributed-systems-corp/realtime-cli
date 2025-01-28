@@ -91,9 +91,14 @@ class Neo4jConnection:
     """Manages the Neo4j database connection."""
 
     def __init__(self):
-        """Initialize the Neo4j connection using environment variables from secrets."""
+        """Initialize Neo4j connection attributes."""
+        self.driver = None
         if not NEO4J_AVAILABLE:
             logger.warning("Neo4j driver not installed. Some functionalities are disabled.")
+
+    async def connect(self):
+        """Establish connection to Neo4j database."""
+        if not NEO4J_AVAILABLE:
             return
 
         # Default connection details if not provided in environment
@@ -109,7 +114,6 @@ class Neo4jConnection:
         except Exception as e:
             logger.error(f"Failed to connect to Neo4j: {str(e)}")
             raise
-        self.driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
 
     async def close(self):
         """Close the Neo4j connection."""
@@ -126,6 +130,7 @@ async def get_db():
     """Dependency to get database session."""
     db = Neo4jConnection()
     try:
+        await db.connect()
         yield db
     finally:
         await db.close()
