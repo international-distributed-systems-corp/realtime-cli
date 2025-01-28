@@ -388,6 +388,10 @@ async def main():
             compression=None
         ):
             await asyncio.Future()  # run forever
+    except Exception as e:
+        print(f"Server error: {e}")
+    finally:
+        print("Server shutting down.")
 
 if __name__ == "__main__":
     try:
