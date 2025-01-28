@@ -374,7 +374,7 @@ async def main():
         
         async with websockets.connect(
             RELAY_SERVER_URL,
-            extra_headers={"Content-Type": "application/json"}
+            additional_headers={"Content-Type": "application/json"}
         ) as ws:
             # Set up signal handler
             loop = asyncio.get_event_loop()
