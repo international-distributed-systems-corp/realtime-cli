@@ -735,3 +735,246 @@ if __name__ == "__main__":
             for line in transcript:
                 f.write(line + "\n")
             f.write("=" * 50 + "\n")
+#!/usr/bin/env python3
+"""
+Command-line interface for the OpenAI Realtime API with improved handling
+"""
+import os
+import asyncio
+import websockets
+import json
+import uuid
+import numpy
+import pyaudio
+import logging
+import threading
+import base64
+import signal
+import sys
+from datetime import datetime
+from typing import Optional, Dict, Any, List
+from pathlib import Path
+from queue import Queue, Empty
+
+from conversation_display import ConversationDisplay
+from conversation import ConversationManager
+from audio_training.storage import AudioStorage
+from utils import console, handle_interrupt
+from events import EventHandler, EventType
+from state import SessionState, ResponseState, AudioState
+from session_manager import SessionManager
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+class AudioProcessor:
+    """Handles audio processing and streaming"""
+    
+    def __init__(self, state: SessionState):
+        self.state = state
+        self.p = pyaudio.PyAudio()
+        self.stream = None
+        self.is_recording = False
+        
+    def start(self):
+        """Initialize and start audio recording"""
+        if self.is_recording:
+            return
+            
+        self.stream = self.p.open(
+            format=pyaudio.paFloat32,
+            channels=1,
+            rate=24000,
+            input=True,
+            frames_per_buffer=2048,
+            stream_callback=self._audio_callback
+        )
+        
+        self.is_recording = True
+        self.stream.start_stream()
+        logger.info("Audio recording started")
+        
+    def _audio_callback(self, in_data, frame_count, time_info, status):
+        """Process incoming audio"""
+        if status:
+            logger.warning(f"Audio status: {status}")
+            
+        if self.is_recording and hasattr(self.state.audio, 'queue'):
+            # Process audio level
+            audio_data = numpy.frombuffer(in_data, dtype=numpy.float32)
+            level = float(numpy.abs(audio_data).mean())
+            
+            # Update display
+            self.state.audio.display.update_input_level(level)
+            self.state.audio.queue.put(in_data)
+            
+        return (in_data, pyaudio.paContinue)
+        
+    def stop(self):
+        """Stop recording and cleanup"""
+        self.is_recording = False
+        if self.stream:
+            self.stream.stop_stream()
+            self.stream.close()
+            self.stream = None
+        self.p.terminate()
+        logger.info("Audio recording stopped")
+
+class ConversationClient:
+    """Manages the conversation session"""
+    
+    def __init__(self):
+        self.state = SessionState()
+        self.state.audio.queue = Queue()
+        self.state.audio.display = ConversationDisplay()
+        self.state.audio.storage = AudioStorage()
+        self.state.conversation = ConversationManager()
+        self.session = SessionManager()
+        self.audio = AudioProcessor(self.state)
+        self.transcript: List[str] = []
+        
+    async def connect(self):
+        """Connect to the relay server"""
+        url = "wss://arthurcolle--realtime-relay-dev.modal.run/ws"
+        
+        try:
+            self.ws = await websockets.connect(
+                url,
+                ping_interval=10,
+                ping_timeout=30,
+                close_timeout=30,
+                max_size=10 * 1024 * 1024,
+                ssl=True,
+                compression=None
+            )
+            
+            # Initialize session
+            await self.ws.send(json.dumps({
+                "type": "init_session",
+                "session_config": self.session.get_config()
+            }))
+            
+            logger.info("Connected to relay server")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Connection failed: {e}")
+            return False
+            
+    async def start(self):
+        """Start the conversation session"""
+        if not await self.connect():
+            return
+            
+        try:
+            # Set up signal handler
+            loop = asyncio.get_event_loop()
+            loop.add_signal_handler(
+                signal.SIGINT,
+                lambda: asyncio.create_task(self.cleanup())
+            )
+            
+            # Start audio processing
+            self.audio.start()
+            
+            # Run main loops
+            await asyncio.gather(
+                self.process_audio(),
+                self.handle_events()
+            )
+            
+        except Exception as e:
+            logger.error(f"Session error: {e}")
+            
+        finally:
+            await self.cleanup()
+            
+    async def process_audio(self):
+        """Process and send audio data"""
+        while True:
+            try:
+                audio_data = self.state.audio.queue.get_nowait()
+                
+                # Send audio buffer
+                event = {
+                    "event_id": f"evt_{uuid.uuid4().hex[:6]}",
+                    "type": "input_audio_buffer.append",
+                    "audio": base64.b64encode(audio_data).decode('utf-8')
+                }
+                await self.ws.send(json.dumps(event))
+                
+            except Empty:
+                await asyncio.sleep(0.01)
+                
+            except Exception as e:
+                logger.error(f"Audio processing error: {e}")
+                break
+                
+    async def handle_events(self):
+        """Handle incoming server events"""
+        async for msg in self.ws:
+            try:
+                event = json.loads(msg)
+                event_type = event.get("type")
+                
+                if event_type == "error":
+                    logger.error(f"Server error: {event['error'].get('message')}")
+                    
+                elif event_type == "session.created":
+                    logger.info("Session initialized")
+                    
+                elif event_type == "conversation.item.input_audio_transcription.completed":
+                    text = event["transcript"]
+                    self.transcript.append(f"User: {text}")
+                    print(f"\nUser: {text}")
+                    
+                elif event_type == "response.text.delta":
+                    if event.get("finish_reason") == "stop":
+                        self.transcript.append(f"Assistant: {event.get('text', '')}")
+                    sys.stdout.write(event.get("delta", ""))
+                    sys.stdout.flush()
+                    
+            except Exception as e:
+                logger.error(f"Event handling error: {e}")
+                
+    async def cleanup(self):
+        """Clean up resources"""
+        logger.info("Cleaning up...")
+        
+        # Stop audio
+        self.audio.stop()
+        
+        # Close websocket
+        if hasattr(self, 'ws'):
+            await self.ws.close()
+            
+        # Save transcript
+        if self.transcript:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"transcript_{timestamp}.txt"
+            
+            with open(filename, "w") as f:
+                f.write("Conversation Transcript\n")
+                f.write("=" * 50 + "\n")
+                for line in self.transcript:
+                    f.write(f"{line}\n")
+                f.write("=" * 50 + "\n")
+                
+            logger.info(f"Transcript saved to {filename}")
+
+def main():
+    """Main entry point"""
+    try:
+        client = ConversationClient()
+        asyncio.run(client.start())
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
+        
+if __name__ == "__main__":
+    main()
