@@ -468,9 +468,12 @@ async def handle_server_events(ws):
 async def main():
     """Main entry point"""
     try:
+        # Initialize thought analyzer
+        thought_analyzer = ThoughtAnalyzer(os.environ["OPENAI_API_KEY"])
+        print("Initializing thought analysis system...")
+        
         print(f"Connecting to relay at {RELAY_SERVER_URL} ...")
         
-        # Add connection timeout and heartbeat
         async with websockets.connect(
             RELAY_SERVER_URL,
             ping_interval=20,
@@ -490,12 +493,26 @@ async def main():
             }
             await ws.send(json.dumps(init_msg))
             
-            # Start event handler and conversation loops immediately
-            print("Starting chat session...")
+            # Start event handler and conversation loops with thought analysis
+            print("Starting enhanced chat session with thought analysis...")
             STATE.audio.is_recording = True
             STATE.response_state = ResponseState.IDLE
             
-            # Run conversation and event handling loops with recording already started
+            # Initialize conversation context
+            context = {
+                "audio_enabled": True,
+                "available_tools": session_manager.get_available_tools(),
+                "current_state": STATE.__dict__
+            }
+            
+            # Analyze initial state
+            initial_analysis = await thought_analyzer.analyze_query(
+                "Initialize conversation system",
+                context=context
+            )
+            logger.info(f"Initial analysis: {initial_analysis.dict()}")
+            
+            # Run conversation and event handling loops with thought analysis
             done, pending = await asyncio.wait(
                 [
                     asyncio.create_task(conversation_loop(ws)),
