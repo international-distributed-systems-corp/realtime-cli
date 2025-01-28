@@ -6,8 +6,12 @@ import json
 import asyncio
 import websockets
 import requests
+import logging
+
+logger = logging.getLogger(__name__)
 import uuid
-from typing import Optional
+import aiohttp
+from typing import Optional, List, Dict, Any
 
 from tool_registry_client import ToolRegistryClient
 
@@ -90,6 +94,18 @@ def create_ephemeral_token(session_config: dict) -> str:
 ################################################################################
 # Relay Connection
 ################################################################################
+
+async def list_tools() -> List[Dict[str, Any]]:
+    """List all available tools from the registry"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{TOOL_REGISTRY_URL}/tools") as response:
+                if response.status == 200:
+                    return await response.json()
+                return []
+    except Exception as e:
+        logger.warning(f"Failed to fetch tools: {e}")
+        return []
 
 class RealtimeRelay:
     """
@@ -185,9 +201,12 @@ async def handle_client(client_ws, tool_registry=None):
 
         # Load available tools and update session config
         if tool_registry:
-            tools = await tool_registry.list_tools()
-            if tools:
-                session_config.setdefault("tools", []).extend(tools)
+            try:
+                tools = await tool_registry.list_tools()
+                if tools:
+                    session_config.setdefault("tools", []).extend(tools)
+            except Exception as e:
+                logger.warning(f"Failed to load tools: {e}")
         
         # Step 2: Start bi-directional relay
         async def relay_local_to_upstream():
