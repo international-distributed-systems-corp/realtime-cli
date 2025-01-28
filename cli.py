@@ -614,24 +614,53 @@ async def main():
     try:
         print(f"Connecting to relay at {RELAY_SERVER_URL} ...")
         
-        # Configure WebSocket connection with retries
-        retry_count = 0
-        max_retries = 3
-        while retry_count < max_retries:
-            try:
-                async with websockets.connect(
-                    RELAY_SERVER_URL,
-                    ping_interval=10,
-                    ping_timeout=30,
-                    close_timeout=30,
-                    max_size=10 * 1024 * 1024,
-                    ssl=True,  # Enable SSL for wss://
-                    compression=None,
-                    open_timeout=30  # Explicit handshake timeout
-                ) as ws:
-                    print("Connected to relay server")
-                    # Rest of the connection logic...
-                    break  # Exit retry loop on successful connection
+        async with websockets.connect(
+            RELAY_SERVER_URL,
+            ping_interval=10,
+            ping_timeout=30,
+            close_timeout=30,
+            max_size=10 * 1024 * 1024,
+            ssl=True,
+            compression=None,
+            open_timeout=30
+        ) as ws:
+            print("Connected to relay server")
+            
+            # Set up signal handler
+            loop = asyncio.get_event_loop()
+            loop.add_signal_handler(signal.SIGINT, lambda: asyncio.create_task(handle_interrupt(ws)))
+            
+            # Initialize session
+            init_msg = {
+                "type": "init_session",
+                "session_config": session_manager.get_config()
+            }
+            await ws.send(json.dumps(init_msg))
+            
+            print("\nStarting chat session...")
+            print("Just start speaking naturally or type your message.")
+            print("To type a message, start with ':' (e.g. :hello)")
+            print("Press Ctrl+C to end the conversation.\n")
+            
+            STATE.audio.is_recording = True
+            STATE.response_state = ResponseState.IDLE
+            
+            # Run conversation and event handling loops
+            done, pending = await asyncio.wait(
+                [
+                    asyncio.create_task(conversation_loop(ws)),
+                    asyncio.create_task(handle_server_events(ws))
+                ],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+            
+            # Cancel remaining tasks
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
             except (websockets.exceptions.InvalidStatusCode,
                    websockets.exceptions.InvalidMessage,
                    websockets.exceptions.ConnectionClosed) as e:
