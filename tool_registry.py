@@ -118,7 +118,7 @@ class Neo4jConnection:
     async def close(self):
         """Close the Neo4j connection."""
         if NEO4J_AVAILABLE and self.driver is not None:
-            self.driver.close()  # Neo4j driver close() is not async
+            self.driver.close()  # Neo4j driver close() is synchronous
 
     async def get_session(self):
         """Get a new Neo4j session."""
