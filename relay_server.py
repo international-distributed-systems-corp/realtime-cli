@@ -137,18 +137,23 @@ class RealtimeRelay:
         """
         Connect to the Realtime API over WebSocket using ephemeral token.
         """
-        # Build the Realtime wss URL
-        # We can append "?model=..." if not specified in the session config.
-        # But if session_config includes "model", the ephemeral session should
-        # already be locked to that model. It's optional to pass again in the URL.
+        # Build the Realtime wss URL with proper hostname
         base_url = "wss://realtime.openai.com/v1/chat"
-
+        
+        # Ensure proper SSL/TLS setup
+        ssl_context = None  # Let websockets use default SSL context
+        
         headers = {
             "Authorization": f"Bearer {self.ephemeral_token}",
             "Content-Type": "application/json"
         }
 
-        self.upstream_ws = await websockets.connect(base_url, additional_headers=headers)
+        self.upstream_ws = await websockets.connect(
+            base_url,
+            additional_headers=headers,
+            ssl=ssl_context,
+            host="realtime.openai.com"  # Explicitly set host header
+        )
 
     async def close(self):
         if self.upstream_ws:
