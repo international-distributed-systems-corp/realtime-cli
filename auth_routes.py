@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
@@ -9,6 +10,47 @@ import uuid
 
 from models.user import User
 from models.subscription import SUBSCRIPTION_TIERS
+from db import get_db
+
+# User management functions
+def get_user(email: str) -> Optional[User]:
+    """Get user by email"""
+    with get_db() as conn:
+        result = conn.execute(
+            "SELECT * FROM users WHERE email = ?",
+            (email,)
+        ).fetchone()
+        if result:
+            return User(**dict(result))
+    return None
+
+def save_user(user: User) -> None:
+    """Save user to database"""
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO users 
+               (id, email, hashed_password, is_active, is_verified,
+                created_at, subscription_tier, subscription_expires,
+                api_key, usage_limits, current_usage)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (user.id, user.email, user.hashed_password, user.is_active,
+             user.is_verified, user.created_at.isoformat(),
+             user.subscription_tier,
+             user.subscription_expires.isoformat() if user.subscription_expires else None,
+             user.api_key,
+             json.dumps(user.usage_limits),
+             json.dumps(user.current_usage))
+        )
+        conn.commit()
+
+def authenticate_user(email: str, password: str) -> Optional[User]:
+    """Authenticate user with email and password"""
+    user = get_user(email)
+    if not user:
+        return None
+    if not verify_password(password, user.hashed_password):
+        return None
+    return user
 
 # Configuration
 SECRET_KEY = "your-secret-key-here"  # Change this!
