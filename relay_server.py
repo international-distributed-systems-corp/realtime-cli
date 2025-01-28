@@ -183,6 +183,10 @@ async def handle_client(client_ws):
         relay = RealtimeRelay(ephemeral_token, session_config)
         await relay.connect_upstream()
 
+        # Load available tools
+        tools = await tool_registry.list_tools()
+        session_config["tools"] = tools
+        
         # Step 2: Start bi-directional relay
         async def relay_local_to_upstream():
             """
@@ -212,7 +216,33 @@ async def handle_client(client_ws):
                         await client_ws.send(json.dumps(error_event))
                         continue
 
-                    await relay.upstream_ws.send(json.dumps(data))
+                    # Handle function calls
+                    if data.get("type") == "function.call":
+                        try:
+                            result = await tool_registry.call_function(
+                                data["name"],
+                                data["parameters"]
+                            )
+                            response = {
+                                "event_id": f"evt_{uuid.uuid4().hex[:6]}",
+                                "type": "function.response",
+                                "response_id": data.get("response_id"),
+                                "result": result
+                            }
+                            await client_ws.send(json.dumps(response))
+                        except Exception as e:
+                            error = {
+                                "event_id": f"evt_{uuid.uuid4().hex[:6]}",
+                                "type": "error",
+                                "error": {
+                                    "type": "function_error",
+                                    "code": "function_call_failed",
+                                    "message": str(e)
+                                }
+                            }
+                            await client_ws.send(json.dumps(error))
+                    else:
+                        await relay.upstream_ws.send(json.dumps(data))
                 except json.JSONDecodeError:
                     error_event = {
                         "event_id": f"evt_{uuid.uuid4().hex[:6]}",

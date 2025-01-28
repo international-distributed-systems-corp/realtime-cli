@@ -109,13 +109,18 @@ class ToolRegistry:
                 detail=f"Failed to retrieve tool: {str(e)}"
             )
 
-    def list_tools(self) -> List[Tool]:
-        """List all registered tools (latest versions)"""
+    def list_tools(self) -> List[Dict[str, Any]]:
+        """List all registered tools in OpenAI format"""
         try:
-            latest_tools = []
+            tools = []
             for name in self.tool_versions:
-                latest_tools.append(self.tool_versions[name][-1])
-            return latest_tools
+                tool = self.tool_versions[name][-1]
+                tools.append({
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.input_schema
+                })
+            return tools
             
         except Exception as e:
             logger.error(f"Error listing tools: {str(e)}")
