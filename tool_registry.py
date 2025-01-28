@@ -83,9 +83,9 @@ class Neo4jConnection:
             logger.warning("Neo4j driver not installed. Some functionalities are disabled.")
             return
 
-        uri = os.getenv("NEO4J_URI", "bolt://n4j.brainchain.cloud")
+        uri = os.getenv("NEO4J_URI", "neo4j://bolt.n4j.distributed.systems")
         user = os.getenv("NEO4J_USER", "neo4j")
-        password = os.getenv("NEO4J_PASSWORD", "password")
+        password = os.getenv("NEO4J_PASSWORD", "Backstab2025!")
         self.driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
 
     async def close(self):
