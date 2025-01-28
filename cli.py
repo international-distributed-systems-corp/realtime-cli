@@ -405,12 +405,15 @@ async def conversation_loop(ws):
             await STATE.record_task
 
 
+# Global transcript storage
+transcript = []
+
 async def handle_server_events(ws):
     """Handle incoming server events with advanced state management and error recovery"""
     text_accumulator = StreamingTextAccumulator()
     retry_count = 0
     last_event_time = datetime.now()
-    transcript = []  # Store conversation transcript
+    global transcript  # Use global transcript
     
     # Initialize state tracking
     conversation_state = {
