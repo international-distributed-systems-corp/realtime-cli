@@ -63,10 +63,11 @@ manager = ConnectionManager()
 
 @web_app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    logger.info("New WebSocket connection accepted")
-    
+    """Handle WebSocket connections with proper lifecycle management"""
     try:
+        await websocket.accept()
+        logger.info("New WebSocket connection accepted")
+        
         # Send immediate connection acknowledgment
         await websocket.send_text(json.dumps({
             "type": "connection.established",
@@ -75,7 +76,8 @@ async def websocket_endpoint(websocket: WebSocket):
         
         while True:
             try:
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                # Use shorter timeout to maintain connection
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
                 event = json.loads(data)
                 
                 # Handle session initialization
@@ -98,13 +100,18 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "message": "Failed to establish OpenAI connection"
                             }
                         }))
+                        break  # Exit on failed initialization
                 else:
                     # Echo back other events
                     await websocket.send_text(json.dumps(event))
                     
             except asyncio.TimeoutError:
                 # Send ping to keep connection alive
-                await websocket.send_text(json.dumps({"type": "ping"}))
+                try:
+                    await websocket.send_text(json.dumps({"type": "ping"}))
+                except:
+                    logger.warning("Failed to send ping, closing connection")
+                    break
                 
     except WebSocketDisconnect:
         logger.info("Client disconnected normally")
@@ -124,10 +131,13 @@ async def websocket_endpoint(websocket: WebSocket):
     image=image,
     keep_warm=1,
     allow_concurrent_inputs=True,  # Allow multiple WebSocket connections
-    timeout=600  # 10 minute timeout for long-running WebSocket connections
+    timeout=600,  # 10 minute timeout for long-running WebSocket connections
+    container_idle_timeout=300  # Keep container alive for 5 minutes after last request
 )
-@asgi_app(label="realtime-relay")
+@asgi_app()
 def fastapi_app():
+    """ASGI app for handling WebSocket connections"""
+    web_app.root_path = ""  # Ensure proper WebSocket path handling
     return web_app
 
 if __name__ == "__main__":
