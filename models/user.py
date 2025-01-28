@@ -21,5 +21,19 @@ class User(BaseModel):
     current_usage: dict = {
         "daily_tokens": 0,
         "monthly_tokens": 0,
-        "active_sessions": 0
+        "active_sessions": 0,
+        "audio_minutes": 0,
+        "text_input_tokens": 0,
+        "text_output_tokens": 0,
+        "audio_input_tokens": 0,
+        "audio_output_tokens": 0,
+        "cached_tokens": 0
+    }
+    billing: dict = {
+        "current_charges": 0.0,
+        "last_billing_date": None,
+        "payment_method": None,
+        "region_code": "US",
+        "tax_rate": 0.0,
+        "currency": "USD"
     }

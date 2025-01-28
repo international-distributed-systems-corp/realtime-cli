@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 from datetime import datetime
+from .pricing import ModelType, PricingTier, calculate_usage_cost
 
 class SubscriptionTier(BaseModel):
     """Subscription tier configuration"""
@@ -30,12 +31,14 @@ SUBSCRIPTION_TIERS = {
         limits={
             "daily_tokens": 50000,
             "monthly_tokens": 1000000,
-            "concurrent_sessions": 1
+            "concurrent_sessions": 1,
+            "audio_minutes": 0
         },
         features={
             "audio_enabled": False,
             "max_context_length": 4000,
-            "available_models": ["gpt-4"]
+            "available_models": [ModelType.GPT4O_MINI_REALTIME.value],
+            "pricing_tier": PricingTier.STANDARD.value
         }
     ),
     "pro": SubscriptionTier(
@@ -45,12 +48,17 @@ SUBSCRIPTION_TIERS = {
         limits={
             "daily_tokens": 200000,
             "monthly_tokens": 5000000,
-            "concurrent_sessions": 5
+            "concurrent_sessions": 5,
+            "audio_minutes": 100
         },
         features={
             "audio_enabled": True,
             "max_context_length": 8000,
-            "available_models": ["gpt-4", "gpt-4-turbo"]
+            "available_models": [
+                ModelType.GPT4O_REALTIME.value,
+                ModelType.GPT4O_MINI_REALTIME.value
+            ],
+            "pricing_tier": PricingTier.DISCOUNTED.value
         }
     ),
     "enterprise": SubscriptionTier(
@@ -60,12 +68,19 @@ SUBSCRIPTION_TIERS = {
         limits={
             "daily_tokens": 1000000,
             "monthly_tokens": 20000000,
-            "concurrent_sessions": 20
+            "concurrent_sessions": 20,
+            "audio_minutes": 1000
         },
         features={
             "audio_enabled": True,
             "max_context_length": 32000,
-            "available_models": ["gpt-4", "gpt-4-turbo", "gpt-4-32k"]
+            "available_models": [
+                ModelType.GPT4O_REALTIME.value,
+                ModelType.GPT4O_MINI_REALTIME.value
+            ],
+            "pricing_tier": PricingTier.PREMIUM.value,
+            "custom_models": True,
+            "priority_support": True
         }
     )
 }
