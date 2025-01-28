@@ -410,6 +410,7 @@ async def handle_server_events(ws):
     text_accumulator = StreamingTextAccumulator()
     retry_count = 0
     last_event_time = datetime.now()
+    transcript = []  # Store conversation transcript
     
     # Initialize state tracking
     conversation_state = {
@@ -445,6 +446,8 @@ async def handle_server_events(ws):
                     if (STATE.response_state == ResponseState.RESPONDING and 
                         event["response_id"] == STATE.current_response_id):
                         text_accumulator.update(event["delta"])
+                        if event.get("finish_reason") == "stop":
+                            transcript.append(f"Assistant: {text_accumulator.get_text()}")
                         
                 elif event_type == "response.audio.delta":
                     if (STATE.response_state == ResponseState.RESPONDING and 
@@ -516,8 +519,9 @@ async def handle_server_events(ws):
                         STATE.audio.display.complete_current_line()
                     
                 elif event_type == "conversation.item.input_audio_transcription.completed":
-                    transcript = event['transcript']
-                    STATE.audio.display.update_current_text(transcript)
+                    transcript_text = event['transcript']
+                    transcript.append(f"User: {transcript_text}")
+                    STATE.audio.display.update_current_text(transcript_text)
                     STATE.audio.display.complete_current_line()
                     
                     # Handle system commands and tool execution
@@ -621,4 +625,7 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("CLI interrupted.")
+        print("\nConversation transcript:")
+        for line in transcript:
+            print(line)
+        print("\nCLI interrupted.")
