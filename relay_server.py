@@ -9,12 +9,35 @@ import requests
 import logging
 from datetime import datetime
 
-# Configure minimal logging
+# Configure structured logging
 logging.basicConfig(
-    level=logging.ERROR,
-    format='%(levelname)s: %(message)s'
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+# Define event types
+SERVER_EVENTS = {
+    'server.start': 'Server started',
+    'server.stop': 'Server stopped',
+    'client.connect': 'Client connected',
+    'client.disconnect': 'Client disconnected',
+    'session.create': 'Session created',
+    'session.end': 'Session ended',
+    'error.token': 'Token error',
+    'error.connection': 'Connection error',
+    'error.relay': 'Relay error'
+}
+
+CLIENT_EVENTS = {
+    'init_session': 'Session initialization',
+    'function.call': 'Function call',
+    'function.response': 'Function response',
+    'error': 'Error event',
+    'rate_limits.updated': 'Rate limits updated',
+    'session.created': 'Session created'
+}
 import uuid
 import aiohttp
 from typing import Optional, List, Dict, Any
@@ -148,11 +171,14 @@ async def handle_client(client_ws, tool_registry=None):
     """
     relay = None
     try:
+        client_id = str(uuid.uuid4())[:8]
+        logger.info(f"New client connected [id={client_id}]", extra={'event': 'client.connect', 'client_id': client_id})
+
         # Step 1: Wait for session init from local with timeout
         try:
             init_msg_str = await asyncio.wait_for(client_ws.recv(), timeout=5.0)
         except asyncio.TimeoutError:
-            print("Timeout waiting for init message")
+            logger.warning(f"Session init timeout [id={client_id}]", extra={'event': 'error.timeout', 'client_id': client_id})
             return
         init_msg = json.loads(init_msg_str)
         
@@ -351,22 +377,8 @@ async def main():
     # Initialize Tool Registry
     tool_registry = await initialize_tool_registry()
     
-    print(r"""
-██████╗░██╗░██████╗████████╗██████╗░██╗██████╗░██╗░░░██╗████████╗███████╗██████╗░
-██╔══██╗██║██╔════╝╚══██╔══╝██╔══██╗██║██╔══██╗██║░░░██║╚══██╔══╝██╔════╝██╔══██╗
-██║░░██║██║╚█████╗░░░░██║░░░██████╔╝██║██████╦╝██║░░░██║░░░██║░░░█████╗░░██║░░██║
-██║░░██║██║░╚═══██╗░░░██║░░░██╔══██╗██║██╔══██╗██║░░░██║░░░██║░░░██╔══╝░░██║░░██║
-██████╔╝██║██████╔╝░░░██║░░░██║░░██║██║██████╦╝╚██████╔╝░░░██║░░░███████╗██████╔╝
-╚═════╝░╚═╝╚═════╝░░░░╚═╝░░░╚═╝░░╚═╝╚═╝╚═════╝░░╚═════╝░░░░╚═╝░░░╚══════╝╚═════╝░
-
-░██████╗██╗░░░██╗░██████╗████████╗███████╗███╗░░░███╗░██████╗
-██╔════╝╚██╗░██╔╝██╔════╝╚══██╔══╝██╔════╝████╗░████║██╔════╝
-╚█████╗░░╚████╔╝░╚█████╗░░░░██║░░░█████╗░░██╔████╔██║╚█████╗░
-░╚═══██╗░░╚██╔╝░░░╚═══██╗░░░██║░░░██╔══╝░░██║╚██╔╝██║░╚═══██╗
-██████╔╝░░░██║░░░██████╔╝░░░██║░░░███████╗██║░╚═╝░██║██████╔╝
-╚═════╝░░░░╚═╝░░░╚═════╝░░░░╚═╝░░░╚══════╝╚═╝░░░░░╚═╝╚═════╝░""")
-    print("\n")
-    print(f"Starting relay server on ws://localhost:{LOCAL_SERVER_PORT}")
+    logger.info(f"Starting relay server on ws://localhost:{LOCAL_SERVER_PORT}", 
+               extra={'event': 'server.start', 'port': LOCAL_SERVER_PORT})
     
     try:
         server = await websockets.serve(
@@ -377,12 +389,12 @@ async def main():
         )
         await asyncio.Future()  # run forever
     except Exception as e:
-        print(f"Server error: {e}")
+        logger.error(f"Server error: {e}", extra={'event': 'error.server', 'error': str(e)})
     finally:
-        print("Server shutting down.")
+        logger.info("Server shutting down.", extra={'event': 'server.stop'})
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("Relay server shutting down.")
+        logger.info("Relay server shutting down.", extra={'event': 'server.stop', 'reason': 'keyboard_interrupt'})
