@@ -183,24 +183,8 @@ async def websocket_endpoint(websocket: WebSocket):
             relay = RealtimeRelay(token, session_config)
             await relay.connect_upstream()
             
-            # Track usage metrics
-            token_count = 0
-            audio_seconds = 0.0
-            
-            async def track_usage():
-                nonlocal token_count, audio_seconds
-                await auth.record_usage(
-                    user.id,
-                    token_count,
-                    audio_seconds,
-                    "realtime_session"
-                )
-            
-            # Start bi-directional relay with usage tracking
-            try:
-                await handle_client(websocket, relay)
-            finally:
-                await track_usage()
+            # Start bi-directional relay
+            await handle_client(websocket, relay)
 
         except Exception as e:
             logger.error(f"Failed to initialize relay: {e}")
