@@ -621,12 +621,13 @@ async def main():
             try:
                 async with websockets.connect(
                     RELAY_SERVER_URL,
-                    ping_interval=20,
-                    ping_timeout=60,
-                    close_timeout=10,
+                    ping_interval=10,
+                    ping_timeout=30,
+                    close_timeout=30,
                     max_size=10 * 1024 * 1024,
                     ssl=True,  # Enable SSL for wss://
-                    compression=None
+                    compression=None,
+                    open_timeout=30  # Explicit handshake timeout
                 ) as ws:
                     print("Connected to relay server")
                     # Rest of the connection logic...

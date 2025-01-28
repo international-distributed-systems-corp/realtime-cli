@@ -62,28 +62,61 @@ manager = ConnectionManager()
 @web_app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    logger.info("New WebSocket connection accepted")
+    
     try:
+        # Send immediate connection acknowledgment
+        await websocket.send_text(json.dumps({
+            "type": "connection.established",
+            "timestamp": str(datetime.now())
+        }))
+        
         while True:
-            data = await websocket.receive_text()
-            event = json.loads(data)
-            
-            # Handle session initialization
-            if event.get("type") == "init_session":
-                # Test connection at startup
-                await test_connection()
-                logger.info("Session initialized")
-                await websocket.send_text(json.dumps({
-                    "type": "session.created",
-                    "session_id": "test-123"
-                }))
-            else:
-                # Echo back other events
-                await websocket.send_text(json.dumps(event))
-            
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                event = json.loads(data)
+                
+                # Handle session initialization
+                if event.get("type") == "init_session":
+                    # Test connection at startup
+                    connection_ok = await test_connection()
+                    if connection_ok:
+                        logger.info("Session initialized successfully")
+                        await websocket.send_text(json.dumps({
+                            "type": "session.created",
+                            "session_id": str(uuid.uuid4()),
+                            "status": "ready"
+                        }))
+                    else:
+                        logger.error("Failed to initialize session")
+                        await websocket.send_text(json.dumps({
+                            "type": "error",
+                            "error": {
+                                "code": "session_init_failed",
+                                "message": "Failed to establish OpenAI connection"
+                            }
+                        }))
+                else:
+                    # Echo back other events
+                    await websocket.send_text(json.dumps(event))
+                    
+            except asyncio.TimeoutError:
+                # Send ping to keep connection alive
+                await websocket.send_text(json.dumps({"type": "ping"}))
+                
     except WebSocketDisconnect:
-        logger.info("Client disconnected")
+        logger.info("Client disconnected normally")
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error: {str(e)}")
+        try:
+            await websocket.send_text(json.dumps({
+                "type": "error",
+                "error": {"message": str(e)}
+            }))
+        except:
+            pass
+    finally:
+        logger.info("Cleaning up WebSocket connection")
 
 @app.function(
     image=image,
