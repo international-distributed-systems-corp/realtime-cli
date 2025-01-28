@@ -67,6 +67,14 @@ class TokenProcessor:
         self._dependency_graph: Dict[str, Set[str]] = defaultdict(set)
         self._composite_triggers: Dict[str, List[str]] = {}
         
+        # Advanced features
+        self._middleware_manager = MiddlewareManager()
+        self._pattern_cache: Dict[str, Pattern] = {}
+        self._trigger_metrics: Dict[str, Dict[str, float]] = defaultdict(dict)
+        self._active_chains: List[asyncio.Task] = []
+        self._backpressure_threshold = 0.8
+        self._token_embeddings: Dict[str, List[float]] = {}
+        
     def register_trigger(self, 
                         pattern: str,
                         handler: Callable,
@@ -120,17 +128,78 @@ class TokenProcessor:
             
     async def process_tokens(self, tokens: List[str]) -> None:
         """Process tokens with advanced features and context"""
-        # Update buffers
-        self._buffer.extend(tokens)
-        self._context_buffer.extend(tokens)
+        metrics = MetricsCollector()
+        await metrics.start_collection()
         
-        # Trim buffers
-        if len(self._buffer) > self.max_buffer_size:
-            self._buffer = self._buffer[-self.max_buffer_size:]
-        if len(self._context_buffer) > self.max_context_size:
-            self._context_buffer = self._context_buffer[-self.max_context_size:]
+        try:
+            # Create middleware context
+            context = MiddlewareContext(
+                request_id=f"req_{time.time_ns()}",
+                metadata={"middleware_manager": self._middleware_manager}
+            )
             
-        buffer_text = " ".join(self._buffer)
+            # Apply pre-processing middleware
+            tokens = await self._middleware_manager.execute_chain(
+                MiddlewareType.PRE_PROCESS,
+                tokens,
+                context
+            )
+            
+            # Update buffers with backpressure control
+            if len(self._buffer) / self.max_buffer_size > self._backpressure_threshold:
+                await asyncio.sleep(0.1)  # Apply backpressure
+                
+            self._buffer.extend(tokens)
+            self._context_buffer.extend(tokens)
+            
+            # Trim buffers
+            if len(self._buffer) > self.max_buffer_size:
+                self._buffer = self._buffer[-self.max_buffer_size:]
+            if len(self._context_buffer) > self.max_context_size:
+                self._context_buffer = self._context_buffer[-self.max_context_size:]
+                
+            buffer_text = " ".join(self._buffer)
+            
+            # Process triggers with metrics
+            for token in tokens:
+                start_time = time.time()
+                
+                # Check pattern cache
+                pattern_start = time.time()
+                for trigger_id, trigger in self.triggers.items():
+                    if trigger.pattern.pattern not in self._pattern_cache:
+                        self._pattern_cache[trigger.pattern.pattern] = trigger.pattern
+                pattern_time = time.time() - pattern_start
+                
+                # Execute trigger
+                trigger_start = time.time()
+                await self._process_single_token(token, context)
+                trigger_time = time.time() - trigger_start
+                
+                # Record metrics
+                metrics.record_token_processed(token, pattern_time, trigger_time)
+                
+            # Apply post-processing middleware
+            await self._middleware_manager.execute_chain(
+                MiddlewareType.POST_PROCESS,
+                buffer_text,
+                context
+            )
+            
+        except Exception as e:
+            metrics.record_error(e)
+            logger.error(f"Token processing error: {str(e)}")
+            # Apply error handling middleware
+            await self._middleware_manager.execute_chain(
+                MiddlewareType.ERROR_HANDLER,
+                e,
+                context
+            )
+            
+        finally:
+            metrics.stop_collection()
+            # Update trigger metrics
+            self._trigger_metrics[context.request_id] = metrics.get_current_metrics()
         
         # Process triggers in priority order
         while not self._priority_queue.empty():
