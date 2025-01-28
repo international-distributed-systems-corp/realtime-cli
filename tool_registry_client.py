@@ -1,7 +1,7 @@
 import httpx
 import functools
 import logging
-from typing import Optional, Dict, Any, Callable, TypeVar, ParamSpec
+from typing import Optional, Dict, Any, Callable, TypeVar, ParamSpec, List
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
