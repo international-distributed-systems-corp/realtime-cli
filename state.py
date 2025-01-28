@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 from queue import Queue
 from enum import Enum
+from collections import defaultdict
 
 class ResponseState(Enum):
     """Possible states for the response system"""
