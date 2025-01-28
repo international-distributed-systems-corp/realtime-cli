@@ -719,7 +719,19 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nConversation transcript:")
+        print("\nFull Conversation Transcript:")
+        print("=" * 50)
         for line in transcript:
             print(line)
-        print("\nCLI interrupted.")
+        print("=" * 50)
+        print("\nCLI interrupted. Transcript saved.")
+        
+        # Save transcript to file
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"transcript_{timestamp}.txt"
+        with open(filename, "w") as f:
+            f.write("Conversation Transcript\n")
+            f.write("=" * 50 + "\n")
+            for line in transcript:
+                f.write(line + "\n")
+            f.write("=" * 50 + "\n")
