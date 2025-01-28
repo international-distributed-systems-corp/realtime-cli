@@ -61,7 +61,7 @@ manager = ConnectionManager()
 
 @web_app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+    await websocket.accept()
     try:
         while True:
             data = await websocket.receive_text()
@@ -71,16 +71,19 @@ async def websocket_endpoint(websocket: WebSocket):
             if event.get("type") == "init_session":
                 # Test connection at startup
                 await test_connection()
-                
-            # Forward event to client
-            await websocket.send_text(json.dumps(event))
+                logger.info("Session initialized")
+                await websocket.send_text(json.dumps({
+                    "type": "session.created",
+                    "session_id": "test-123"
+                }))
+            else:
+                # Echo back other events
+                await websocket.send_text(json.dumps(event))
             
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        logger.info("Client disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
-        if websocket in manager.active_connections:
-            manager.disconnect(websocket)
 
 @app.function(
     image=image,
