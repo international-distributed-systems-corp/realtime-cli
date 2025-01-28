@@ -210,7 +210,6 @@ class AudioManager:
 # Required environment variables
 REQUIRED_ENV_VARS = {
     "OPENAI_API_KEY": "OpenAI API key for creating ephemeral tokens",
-    "TOOL_REGISTRY_URL": "URL of the Tool Registry service",
 }
 
 # Check for required environment variables
@@ -226,7 +225,7 @@ if missing_vars:
     exit(1)
 
 # Initialize configurations
-TOOL_REGISTRY_URL = os.environ["TOOL_REGISTRY_URL"]
+TOOL_REGISTRY_URL = os.environ.get("TOOL_REGISTRY_URL", "http://localhost:2016")
 RELAY_SERVER_URL = "ws://localhost:9000"
 AUDIO_CHUNK = 1024
 FORMAT = pyaudio.paFloat32
@@ -262,7 +261,7 @@ DEFAULT_SESSION_CONFIG = {
     "tools": {
         "type": "registry",
         "url": TOOL_REGISTRY_URL
-    }
+    } if TOOL_REGISTRY_URL else None
 }
 
 # Audio recording settings
