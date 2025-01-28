@@ -161,8 +161,10 @@ async def handle_client(client_ws, tool_registry=None):
     """
     relay = None
     try:
+        print("New client connected, waiting for init message...")
         # Step 1: Wait for session init from local
         init_msg_str = await client_ws.recv()
+        print(f"Received init message: {init_msg_str[:100]}...")
         init_msg = json.loads(init_msg_str)
         
         if init_msg.get("type") != "init_session":
@@ -376,7 +378,9 @@ async def main():
 ██████╔╝░░░██║░░░██████╔╝░░░██║░░░███████╗██║░╚═╝░██║██████╔╝
 ╚═════╝░░░░╚═╝░░░╚═════╝░░░░╚═╝░░░╚══════╝╚═╝░░░░░╚═╝╚═════╝░""")
     print("\n")
-    print(f"Relay server started on ws://localhost:{LOCAL_SERVER_PORT}")
+    print(f"Starting relay server on ws://localhost:{LOCAL_SERVER_PORT}")
+    
+    try:
     async with websockets.serve(
         lambda ws: handle_client(ws, tool_registry), 
         "localhost", 
