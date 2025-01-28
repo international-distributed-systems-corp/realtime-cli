@@ -28,6 +28,7 @@ from utils import (
     ProgressSpinner,
     handle_interrupt
 )
+from visualizer import AudioVisualizer
 from events import EventHandler, EventType
 from state import SessionState, ResponseState, AudioState
 
@@ -238,6 +239,7 @@ STATE.audio.queue = Queue()  # Initialize audio queue
 STATE.audio.player = None  # Initialize player attribute
 STATE.audio.display = ConversationDisplay()  # Add display
 STATE.audio.storage = AudioStorage()  # Initialize audio storage
+STATE.audio.visualizer = AudioVisualizer()  # Initialize visualizer
 STATE.conversation = ConversationManager()  # Add conversation manager
 
 from session_manager import SessionManager
@@ -272,11 +274,12 @@ def audio_callback(in_data, frame_count, time_info, status):
             )
             STATE.audio.queue.put(in_data)
         
-        # Update display
+        # Update display and visualizer
         if frame_count % 2 == 0:  # Reduce update frequency
             status = STATE.conversation.get_conversation_status()
             STATE.audio.display.set_status(status)
             STATE.audio.display.render()
+            STATE.audio.visualizer.update_input_level(in_data)
         
     return (in_data, pyaudio.paContinue)
 
@@ -371,10 +374,9 @@ async def handle_server_events(ws):
                             STATE.audio.player.start()
                             # Ensure we're not recording while playing
                             STATE.audio.is_recording = False
-                        # Update display with output audio level
-                        audio_data_np = numpy.frombuffer(audio_data, dtype=numpy.int16)
-                        output_level = numpy.abs(audio_data_np).mean() / 32768.0
-                        STATE.audio.display.update_output_level(output_level)
+                        # Update display and visualizer with output audio level
+                        STATE.audio.visualizer.update_output_level(audio_data)
+                        STATE.audio.display.update_output_level(STATE.audio.visualizer.output_level)
                         STATE.audio.player.play(audio_data)
                         
                 elif event_type == "response.done":
