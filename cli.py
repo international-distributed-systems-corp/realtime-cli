@@ -568,10 +568,6 @@ async def handle_server_events(ws):
 async def main():
     """Main entry point"""
     try:
-        # Initialize thought analyzer
-        thought_analyzer = ThoughtAnalyzer()
-        print("Initializing thought analysis system...")
-        
         print(f"Connecting to relay at {RELAY_SERVER_URL} ...")
         
         async with websockets.connect(
@@ -586,41 +582,16 @@ async def main():
             loop = asyncio.get_event_loop()
             loop.add_signal_handler(signal.SIGINT, lambda: asyncio.create_task(handle_interrupt(ws)))
             
-            # Initialize session with dynamic config
+            # Initialize session
             init_msg = {
                 "type": "init_session",
                 "session_config": session_manager.get_config()
             }
             await ws.send(json.dumps(init_msg))
             
-            # Start event handler and conversation loops with thought analysis
-            print("Starting enhanced chat session with thought analysis...")
+            print("Starting chat session...")
             STATE.audio.is_recording = True
             STATE.response_state = ResponseState.IDLE
-            
-            # Initialize conversation context
-            context = {
-                "audio_enabled": True,
-                "available_tools": session_manager.get_available_tools(),
-                "current_state": {
-                    "audio": {
-                        "is_recording": STATE.audio.is_recording,
-                        "is_playing": getattr(STATE.audio, "is_playing", False),
-                        "channels": getattr(STATE.audio, "channels", CHANNELS),
-                        "sample_rate": getattr(STATE.audio, "sample_rate", RATE),
-                        "chunk_size": getattr(STATE.audio, "chunk_size", CHUNK)
-                    },
-                    "response_state": STATE.response_state.value if STATE.response_state else None,
-                    "current_response_id": STATE.current_response_id
-                }
-            }
-            
-            # Analyze initial state
-            initial_analysis = await thought_analyzer.analyze_query(
-                "Initialize conversation system",
-                context=context
-            )
-            logger.info(f"Initial analysis: {initial_analysis.dict()}")
             
             # Run conversation and event handling loops with thought analysis
             done, pending = await asyncio.wait(
