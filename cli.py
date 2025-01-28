@@ -235,6 +235,10 @@ DEFAULT_SESSION_CONFIG = {
         "prefix_padding_ms": 300,
         "silence_duration_ms": 500,
         "create_response": True
+    },
+    "tools": {
+        "type": "registry",
+        "url": TOOL_REGISTRY_URL
     }
 }
 

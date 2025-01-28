@@ -7,16 +7,38 @@ import asyncio
 import websockets
 import requests
 import uuid
+from typing import Optional
+
+from tool_registry import ToolRegistry, Tool
 
 ################################################################################
 # Configuration
 ################################################################################
 
-# The standard API key that can create ephemeral tokens.
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    print("Error: Set OPENAI_API_KEY in your environment.")
+# Required environment variables
+REQUIRED_ENV_VARS = {
+    "OPENAI_API_KEY": "OpenAI API key for creating ephemeral tokens",
+    "TOOL_REGISTRY_URL": "URL of the Tool Registry service",
+}
+
+# Check for required environment variables
+missing_vars = []
+for var, description in REQUIRED_ENV_VARS.items():
+    if not os.environ.get(var):
+        missing_vars.append(f"{var} - {description}")
+
+if missing_vars:
+    print("Error: Missing required environment variables:")
+    for var in missing_vars:
+        print(f"- {var}")
     exit(1)
+
+# Initialize configurations
+OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
+TOOL_REGISTRY_URL = os.environ["TOOL_REGISTRY_URL"]
+
+# Initialize Tool Registry
+tool_registry = ToolRegistry()
 
 # The port on which our local relay will listen for the CLI:
 LOCAL_SERVER_PORT = 9000
@@ -24,6 +46,15 @@ LOCAL_SERVER_PORT = 9000
 ################################################################################
 # Helper: Create ephemeral token
 ################################################################################
+
+async def initialize_tool_registry():
+    """Initialize and load tools from the registry"""
+    try:
+        await tool_registry.connect(TOOL_REGISTRY_URL)
+        print("Tool Registry initialized successfully")
+    except Exception as e:
+        print(f"Warning: Failed to initialize Tool Registry: {e}")
+        print("Continuing without tool support...")
 
 def create_ephemeral_token(session_config: dict) -> str:
     """
@@ -262,6 +293,9 @@ async def handle_client(client_ws):
         await client_ws.close()
 
 async def main():
+    # Initialize Tool Registry
+    await initialize_tool_registry()
+    
     print(r"""     888 d8b          888            d8b 888               888                  888 
      888 Y8P          888            Y8P 888               888                  888 
      888              888                888               888                  888 
