@@ -14,6 +14,8 @@ import threading
 from scipy import signal
 import base64
 import signal
+import select
+import sys
 from typing import Optional, Dict, Any
 from pathlib import Path
 from queue import Queue, Empty
@@ -377,11 +379,25 @@ async def start_recording(ws):
     stream.start_stream()
     logger.info("Recording started")
     
-    # Stream audio buffers
+    # Stream audio buffers and handle text input
     while STATE.audio.is_recording:
         try:
+            # Check for text input
+            if select.select([sys.stdin], [], [], 0)[0]:
+                line = sys.stdin.readline().strip()
+                if line.startswith(':'):
+                    text = line[1:].strip()
+                    if text:
+                        event = {
+                            "event_id": f"evt_{uuid.uuid4().hex[:6]}",
+                            "type": "text.content",
+                            "content": text
+                        }
+                        await ws.send(json.dumps(event))
+                        transcript.append(f"User: {text}")
+            
+            # Handle audio
             audio_data = STATE.audio.queue.get_nowait()
-            # Resample from RATE to TARGET_RATE for OpenAI
             resampled_audio = process_audio(audio_data, RATE, TARGET_RATE)
             event = {
                 "event_id": f"evt_{uuid.uuid4().hex[:6]}",
@@ -401,7 +417,8 @@ async def conversation_loop(ws):
     Natural conversation loop for interacting with the Realtime API
     """
     print("\nStarting conversation...")
-    print("Just start speaking naturally - I'll listen and respond.")
+    print("Just start speaking naturally or type your message.")
+    print("To type a message, start with ':' (e.g. :hello)")
     print("Press Ctrl+C to end the conversation.\n")
 
     # Start continuous recording right away
