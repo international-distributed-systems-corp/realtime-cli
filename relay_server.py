@@ -25,27 +25,11 @@ from tool_registry_client import ToolRegistryClient
 # Configuration
 ################################################################################
 
-# Required environment variables
-REQUIRED_ENV_VARS = {
-    "OPENAI_API_KEY": "OpenAI API key for creating ephemeral tokens",
-    "TOOL_REGISTRY_URL": "URL of the Tool Registry service",
-}
-
-# Check for required environment variables
-missing_vars = []
-for var, description in REQUIRED_ENV_VARS.items():
-    if not os.environ.get(var):
-        missing_vars.append(f"{var} - {description}")
-
-if missing_vars:
-    print("Error: Missing required environment variables:")
-    for var in missing_vars:
-        print(f"- {var}")
+# The standard API key that can create ephemeral tokens.
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    print("Error: Set OPENAI_API_KEY in your environment.")
     exit(1)
-
-# Initialize configurations
-OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
-TOOL_REGISTRY_URL = os.environ["TOOL_REGISTRY_URL"]
 
 # The port on which our local relay will listen for the CLI:
 LOCAL_SERVER_PORT = 9000
