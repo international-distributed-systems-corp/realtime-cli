@@ -245,16 +245,21 @@ def audio_callback(in_data, frame_count, time_info, status):
         STATE.audio.visualizer.update_input_level(in_data)
         
         # Update conversation state
-        STATE.conversation.update_human_audio(STATE.audio.visualizer.input_level)
+        audio_level = STATE.audio.visualizer.input_level
+        STATE.conversation.update_human_audio(audio_level)
         
-        # Process audio based on conversation state
-        if STATE.conversation.should_process_audio():
+        # Always process audio when recording is active and not in RESPONDING state
+        if STATE.response_state != ResponseState.RESPONDING:
             STATE.audio.queue.put(in_data)
         
         # Update visualization with conversation status
         if frame_count % 2 == 0:  # Reduce update frequency
             status = STATE.conversation.get_conversation_status()
             print(STATE.audio.visualizer.get_visualization(status), end='', flush=True)
+            
+            # Debug output for audio levels
+            if audio_level > 0.1:  # Only show when there's significant audio
+                print(f"\rAudio Level: {audio_level:.2f}", end='', flush=True)
         
     return (in_data, pyaudio.paContinue)
 
@@ -356,6 +361,7 @@ async def handle_server_events(ws):
                         text_accumulator.stop()
                         STATE.current_response_id = None
                         STATE.response_state = ResponseState.IDLE
+                        print("\nReady for input...")  # Visual indicator
                         # Wait for audio playback to finish and levels to drop
                         if STATE.audio.player:
                             while STATE.audio.visualizer.output_level > 0.05:
