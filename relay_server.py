@@ -37,9 +37,6 @@ if missing_vars:
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 TOOL_REGISTRY_URL = os.environ["TOOL_REGISTRY_URL"]
 
-# Initialize Tool Registry Client
-tool_registry = ToolRegistryClient(base_url=TOOL_REGISTRY_URL)
-
 # The port on which our local relay will listen for the CLI:
 LOCAL_SERVER_PORT = 9000
 
@@ -50,13 +47,14 @@ LOCAL_SERVER_PORT = 9000
 async def initialize_tool_registry():
     """Initialize the Tool Registry client"""
     try:
-        # Test the connection by calling the health endpoint
-        response = await tool_registry.client.get("/health")
-        response.raise_for_status()
+        # Create client instance
+        tool_registry = ToolRegistryClient(base_url=TOOL_REGISTRY_URL)
         print("Tool Registry client initialized successfully")
+        return tool_registry
     except Exception as e:
         print(f"Warning: Failed to initialize Tool Registry client: {e}")
         print("Continuing without tool support...")
+        return None
 
 def create_ephemeral_token(session_config: dict) -> str:
     """
@@ -341,7 +339,7 @@ async def handle_client(client_ws):
 
 async def main():
     # Initialize Tool Registry
-    await initialize_tool_registry()
+    tool_registry = await initialize_tool_registry()
     
     print(r"""
 ██████╗░██╗░██████╗████████╗██████╗░██╗██████╗░██╗░░░██╗████████╗███████╗██████╗░
