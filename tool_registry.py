@@ -136,7 +136,7 @@ async def get_session(db: Neo4jConnection = Depends(get_db)):
     image=image,
     secrets=[Secret.from_name(NEO4J_SECRET_NAME)],
 )
-@asgi_app()
+@asgi_app(label="tools")
 @stub.function(
     image=image,
     secrets=[Secret.from_name(NEO4J_SECRET_NAME)],
