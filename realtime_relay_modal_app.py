@@ -1,6 +1,16 @@
+import asyncio
+import logging
 from modal import Image, Stub, asgi_app
 from fastapi import FastAPI
 import uvicorn
+from relay_server import RealtimeRelay, create_ephemeral_token
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Create FastAPI app with WebSocket support
 web_app = FastAPI()
