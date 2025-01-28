@@ -16,10 +16,17 @@ class AudioVisualizer:
         samples = np.frombuffer(audio_data, dtype=np.int16)
         # Calculate RMS value and normalize
         rms = np.sqrt(np.mean(samples.astype(np.float32)**2))
-        self.input_level = min(1.0, rms / 32768.0)  # Normalize to 0-1
-        self.history.append(self.input_level)
-        if len(self.history) > self.max_history:
-            self.history.pop(0)
+        new_level = min(1.0, rms / 32768.0)  # Normalize to 0-1
+        
+        # Smooth the input level changes
+        alpha = 0.3  # Smoothing factor
+        self.input_level = alpha * new_level + (1 - alpha) * self.input_level
+        
+        # Only update history if level changed significantly
+        if abs(new_level - self.input_level) > 0.05:
+            self.history.append(self.input_level)
+            if len(self.history) > self.max_history:
+                self.history.pop(0)
 
     def update_output_level(self, audio_data: bytes) -> None:
         """Update output audio level from raw PCM16 data"""

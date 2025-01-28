@@ -242,12 +242,14 @@ def audio_callback(in_data, frame_count, time_info, status):
         # Update visualizer with input audio
         STATE.audio.visualizer.update_input_level(in_data)
         
-        # Don't record while AI is speaking
-        if STATE.response_state != ResponseState.RESPONDING:
+        # Only record if AI is not speaking and input level is significant
+        if (STATE.response_state != ResponseState.RESPONDING and 
+            STATE.audio.visualizer.input_level > 0.1):
             STATE.audio.queue.put(in_data)
-            
-        # Print visualization
-        print(STATE.audio.visualizer.get_visualization(), end='', flush=True)
+        
+        # Update visualization less frequently to reduce flicker
+        if frame_count % 3 == 0:  # Only update every 3rd frame
+            print(STATE.audio.visualizer.get_visualization(), end='', flush=True)
         
     return (in_data, pyaudio.paContinue)
 
@@ -349,13 +351,14 @@ async def handle_server_events(ws):
                         text_accumulator.stop()
                         STATE.current_response_id = None
                         STATE.response_state = ResponseState.IDLE
-                        # Wait for audio playback to finish before resuming recording
+                        # Wait for audio playback to finish and levels to drop
                         if STATE.audio.player:
-                            # Give a small delay to ensure audio finishes playing
-                            await asyncio.sleep(0.5)
+                            while STATE.audio.visualizer.output_level > 0.05:
+                                await asyncio.sleep(0.1)
+                            await asyncio.sleep(0.3)  # Additional cooldown
                             STATE.audio.player.stop()
                             STATE.audio.player = None
-                        # Only resume listening after playback is complete
+                        # Only resume recording after output level drops
                         STATE.audio.is_recording = True
                         
                 elif event_type == "input_audio_buffer.speech_started":
