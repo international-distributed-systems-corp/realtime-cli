@@ -2,6 +2,7 @@
 """
 Command-line interface for the OpenAI Realtime API
 """
+import os
 import asyncio
 import websockets
 import json
