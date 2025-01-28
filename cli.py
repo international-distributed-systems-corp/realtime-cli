@@ -661,19 +661,19 @@ async def main():
                     await task
                 except asyncio.CancelledError:
                     pass
-            except (websockets.exceptions.InvalidStatusCode,
-                   websockets.exceptions.InvalidMessage,
-                   websockets.exceptions.ConnectionClosed) as e:
-                retry_count += 1
-                if retry_count < max_retries:
-                    wait_time = 2 ** retry_count  # Exponential backoff
-                    print(f"Connection failed: {str(e)}")
-                    print(f"Retrying in {wait_time} seconds... (Attempt {retry_count + 1}/{max_retries})")
-                    await asyncio.sleep(wait_time)
-                else:
-                    print("Failed to connect after maximum retries")
-                    raise
-            print("Connected to relay server")
+
+    except (websockets.exceptions.InvalidStatusCode,
+            websockets.exceptions.InvalidMessage,
+            websockets.exceptions.ConnectionClosed) as e:
+        retry_count += 1
+        if retry_count < max_retries:
+            wait_time = 2 ** retry_count  # Exponential backoff
+            print(f"Connection failed: {str(e)}")
+            print(f"Retrying in {wait_time} seconds... (Attempt {retry_count + 1}/{max_retries})")
+            await asyncio.sleep(wait_time)
+        else:
+            print("Failed to connect after maximum retries")
+            raise
             # Set up signal handler
             loop = asyncio.get_event_loop()
             loop.add_signal_handler(signal.SIGINT, lambda: asyncio.create_task(handle_interrupt(ws)))
