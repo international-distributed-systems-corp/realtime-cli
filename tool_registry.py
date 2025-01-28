@@ -81,6 +81,24 @@ class ToolRegistry:
                 detail=f"Failed to register tool: {str(e)}"
             )
 
+    async def call_function(self, name: str, parameters: Dict[str, Any]) -> Any:
+        """Call a registered function with parameters"""
+        tool = await self.get_tool(name)
+        if tool.type != ToolType.FUNCTION:
+            raise ValueError(f"Tool {name} is not a function")
+            
+        if not tool.code:
+            raise ValueError(f"Tool {name} has no function code")
+            
+        # Execute function code with parameters
+        namespace = {}
+        exec(tool.code, namespace)
+        func = namespace.get(name)
+        if not func:
+            raise ValueError(f"Function {name} not found in tool code")
+            
+        return await func(**parameters)
+
     def get_tool(self, name: str, version: Optional[str] = None) -> Tool:
         """Get a specific tool by name and optional version"""
         try:
