@@ -236,13 +236,9 @@ RATE = 24000  # OpenAI requires 24kHz sample rate for PCM16
 def audio_callback(in_data, frame_count, time_info, status):
     """Callback for audio recording"""
     if STATE.audio.is_recording and hasattr(STATE.audio, 'queue'):
-        # Apply ducking if AI is speaking
-        if STATE.response_state == ResponseState.RESPONDING:
-            # Convert to numpy array for volume adjustment
-            audio_data = numpy.frombuffer(in_data, dtype=numpy.int16)
-            audio_data = (audio_data * DUCK_RATIO).astype(numpy.int16)
-            in_data = audio_data.tobytes()
-        STATE.audio.queue.put(in_data)
+        # Don't record while AI is speaking
+        if STATE.response_state != ResponseState.RESPONDING:
+            STATE.audio.queue.put(in_data)
     return (in_data, pyaudio.paContinue)
 
 # Audio ducking configuration
@@ -344,10 +340,13 @@ async def handle_server_events(ws):
                         text_accumulator.stop()
                         STATE.current_response_id = None
                         STATE.response_state = ResponseState.IDLE
+                        # Wait for audio playback to finish before resuming recording
                         if STATE.audio.player:
+                            # Give a small delay to ensure audio finishes playing
+                            await asyncio.sleep(0.5)
                             STATE.audio.player.stop()
                             STATE.audio.player = None
-                        # Resume listening after AI is done speaking
+                        # Only resume listening after playback is complete
                         STATE.audio.is_recording = True
                         
                 elif event_type == "input_audio_buffer.speech_started":
