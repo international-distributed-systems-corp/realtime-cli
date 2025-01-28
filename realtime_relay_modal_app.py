@@ -5,6 +5,7 @@ import uuid
 import os
 import websockets
 import requests
+from auth.middleware import AuthMiddleware, security
 from datetime import datetime
 from modal import Image, App, asgi_app
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -26,11 +27,17 @@ web_app = FastAPI(
     root_path_in_servers=False
 )
 
+# Initialize auth middleware
+auth = AuthMiddleware()
+
 # Create Modal app and image
 app = App("realtime-relay")
 image = (
     Image.debian_slim()
-    .pip_install(["fastapi", "uvicorn", "websockets>=12.0", "requests", "python-multipart"])
+    .pip_install([
+        "fastapi", "uvicorn", "websockets>=12.0", "requests", "python-multipart",
+        "motor", "bcrypt", "pydantic[email]"
+    ])
 )
 
 class RealtimeRelay:
@@ -141,7 +148,7 @@ async def handle_client(websocket: WebSocket, relay: Optional[RealtimeRelay] = N
             pass
 
 @web_app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Handle WebSocket connections with proper lifecycle management"""
     relay = None
     try:
@@ -154,6 +161,9 @@ async def websocket_endpoint(websocket: WebSocket):
             "timestamp": str(datetime.now())
         }))
 
+        # Authenticate user
+        user = await auth.authenticate(credentials)
+        
         # Wait for init message
         data = await websocket.receive_text()
         init_msg = json.loads(data)
@@ -175,8 +185,24 @@ async def websocket_endpoint(websocket: WebSocket):
             relay = RealtimeRelay(token, session_config)
             await relay.connect_upstream()
             
-            # Start bi-directional relay
-            await handle_client(websocket, relay)
+            # Track usage metrics
+            token_count = 0
+            audio_seconds = 0.0
+            
+            async def track_usage():
+                nonlocal token_count, audio_seconds
+                await auth.record_usage(
+                    user.id,
+                    token_count,
+                    audio_seconds,
+                    "realtime_session"
+                )
+            
+            # Start bi-directional relay with usage tracking
+            try:
+                await handle_client(websocket, relay)
+            finally:
+                await track_usage()
 
         except Exception as e:
             logger.error(f"Failed to initialize relay: {e}")
