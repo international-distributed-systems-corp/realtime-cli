@@ -2,44 +2,68 @@ import sqlite3
 import os
 import hashlib
 import secrets
+import logging
 from datetime import datetime
 from contextlib import contextmanager
 from typing import Optional, Dict, Any, List
+from pathlib import Path
 
-DATABASE_PATH = "db/realtime.db"
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+DATABASE_PATH = Path("db/realtime.db")
 
 def init_db():
     """Initialize the database with schema"""
-    if not os.path.exists("db"):
-        os.makedirs("db")
+    try:
+        # Create database directory if it doesn't exist
+        DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
         
-    with open("db/schema.sql") as f:
-        schema = f.read()
+        # Read schema file
+        schema_path = Path(__file__).parent / "schema.sql"
+        with open(schema_path) as f:
+            schema = f.read()
         
-    with get_db() as db:
-        db.executescript(schema)
-        
-        # Insert default subscription tiers
-        db.executemany(
-            """INSERT OR IGNORE INTO subscription_tiers 
-               (name, token_limit, audio_limit, base_price, token_overage_price, audio_overage_price)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            [
-                ("free", 100000, 3600, 0.0, 0.002, 0.006),
-                ("basic", 500000, 18000, 50.0, 0.0015, 0.004), 
-                ("pro", 2000000, 72000, 200.0, 0.001, 0.003)
-            ]
-        )
+        # Initialize database
+        with get_db() as db:
+            db.executescript(schema)
+            
+            # Insert default subscription tiers
+            db.executemany(
+                """INSERT OR IGNORE INTO subscription_tiers 
+                   (name, token_limit, audio_limit, base_price, token_overage_price, audio_overage_price)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                [
+                    ("free", 100000, 3600, 0.0, 0.002, 0.006),
+                    ("basic", 500000, 18000, 50.0, 0.0015, 0.004), 
+                    ("pro", 2000000, 72000, 200.0, 0.001, 0.003)
+                ]
+            )
+            db.commit()
+            logger.info("Database initialized successfully")
+            
+    except sqlite3.Error as e:
+        logger.error(f"Database initialization failed: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}")
+        raise
 
 @contextmanager
 def get_db():
     """Context manager for database connections"""
-    db = sqlite3.connect(DATABASE_PATH)
-    db.row_factory = sqlite3.Row
+    db = None
     try:
+        db = sqlite3.connect(DATABASE_PATH)
+        db.row_factory = sqlite3.Row
         yield db
+    except sqlite3.Error as e:
+        logger.error(f"Database connection error: {e}")
+        raise
     finally:
-        db.close()
+        if db:
+            db.close()
 
 def create_user(email: str, password: str) -> int:
     """Create a new user account"""
