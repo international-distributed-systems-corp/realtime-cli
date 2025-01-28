@@ -34,6 +34,6 @@ from tool_registry import web_app
     image=image,
     secrets=[Secret.from_name(NEO4J_SECRET_NAME)],
 )
-@asgi_app()
+@asgi_app(label="tools")
 def fastapi_app():
     return web_app
