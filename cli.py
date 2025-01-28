@@ -617,9 +617,10 @@ async def main():
         async with websockets.connect(
             RELAY_SERVER_URL.replace("localhost", "127.0.0.1"),  # Use IP address
             ping_interval=20,
-            ping_timeout=10,
-            close_timeout=5,
-            max_size=10 * 1024 * 1024  # 10MB max message size
+            ping_timeout=60,  # Increased timeout
+            close_timeout=10,  # Increased timeout
+            max_size=10 * 1024 * 1024,  # 10MB max message size
+            compression=None  # Disable compression to match server
         ) as ws:
             print("Connected to relay server")
             # Set up signal handler

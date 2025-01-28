@@ -173,6 +173,9 @@ async def handle_client(client_ws, tool_registry=None):
         client_id = str(uuid.uuid4())[:8]
         logger.info(f"New client connected [id={client_id}]", extra={'event': 'client.connect', 'client_id': client_id})
 
+        # Keep track of connection state
+        is_connected = True
+
         # Step 1: Wait for session init from local with timeout
         try:
             init_msg_str = await asyncio.wait_for(client_ws.recv(), timeout=5.0)
@@ -235,7 +238,7 @@ async def handle_client(client_ws, tool_registry=None):
                 'errors': {},
                 'latency': []
             }
-            while True:
+            while is_connected:
                 try:
                     data_str = await asyncio.wait_for(client_ws.recv(), timeout=1.0)
                     data = json.loads(data_str)
@@ -357,7 +360,7 @@ async def handle_client(client_ws, tool_registry=None):
             task.cancel()
 
     except (asyncio.CancelledError, websockets.ConnectionClosed):
-        pass
+        logger.info(f"Client connection closed [id={client_id}]")
     except Exception as e:
         logger.error(f"Server error: {e}")
         # Attempt to inform the client
@@ -368,9 +371,15 @@ async def handle_client(client_ws, tool_registry=None):
         try:
             await client_ws.send(json.dumps(err_evt))
         except:
-            pass
+            logger.error(f"Failed to send error to client: {e}")
     finally:
-        await client_ws.close()
+        is_connected = False
+        if relay:
+            await relay.close()
+        try:
+            await client_ws.close()
+        except:
+            pass
 
 async def main():
     # Initialize Tool Registry
