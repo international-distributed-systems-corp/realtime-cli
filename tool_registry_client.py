@@ -118,6 +118,16 @@ async def list_tools(self) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Failed to list tools: {str(e)}")
         return []
+async def list_tools(self) -> List[Dict[str, Any]]:
+    """List all available tools"""
+    try:
+        response = await self.client.get("/tools")
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logger.error(f"Failed to list tools: {str(e)}")
+        return []
+
 async def call_function(self, name: str, parameters: Dict[str, Any]) -> Any:
     """Calls the specified tool with given parameters"""
     try:
