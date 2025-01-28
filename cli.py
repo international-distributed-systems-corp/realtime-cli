@@ -611,6 +611,8 @@ async def handle_server_events(ws):
 
 async def main():
     """Main entry point"""
+    retry_count = 0
+    max_retries = 3
     try:
         print(f"Connecting to relay at {RELAY_SERVER_URL} ...")
         
