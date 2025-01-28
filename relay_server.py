@@ -1,13 +1,9 @@
-# +-----------------------------------------+
-# | relay_server.py                         |
-# +-----------------------------------------+
 import os
 import json
 import asyncio
 import websockets
 import requests
 import logging
-import signal
 from datetime import datetime
 
 # Configure structured logging
