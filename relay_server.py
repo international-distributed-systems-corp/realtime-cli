@@ -298,6 +298,7 @@ async def handle_client(client_ws, tool_registry=None):
                         
                     # Handle session creation
                     elif data.get("type") == "session.created":
+                        pass  # No special handling needed for session creation
                         
                     # Handle errors
                     elif data.get("type") == "error":
