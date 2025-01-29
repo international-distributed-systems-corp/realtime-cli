@@ -29,7 +29,11 @@ class AdvancedComputerTool(BaseAnthropicTool):
             "get_clipboard",
             "set_clipboard",
             "press_key_sequence",
-            "smooth_mouse_move"
+            "smooth_mouse_move",
+            "get_cursor_info",
+            "relative_mouse_move",
+            "mouse_drag",
+            "mouse_scroll"
         ],
         window_id: Optional[str] = None,
         position: Optional[tuple[int, int]] = None,
@@ -129,6 +133,51 @@ class AdvancedComputerTool(BaseAnthropicTool):
             )
             return ToolResult(output=f"Smoothly moved mouse to {coordinate}")
             
+        elif action == "get_cursor_info":
+            import pyautogui
+            x, y = pyautogui.position()
+            color = pyautogui.screenshot().getpixel((x, y))
+            return ToolResult(output=f"Cursor position: ({x}, {y})\nPixel color RGB: {color}")
+            
+        elif action == "relative_mouse_move":
+            if not coordinate:
+                raise ToolError("coordinate required for relative_mouse_move")
+            import pyautogui
+            curr_x, curr_y = pyautogui.position()
+            delta_x, delta_y = coordinate
+            await asyncio.to_thread(
+                pyautogui.moveRel,
+                delta_x,
+                delta_y,
+                duration=duration or 0.2
+            )
+            return ToolResult(output=f"Moved mouse relatively by ({delta_x}, {delta_y})")
+            
+        elif action == "mouse_drag":
+            if not coordinate:
+                raise ToolError("coordinate required for mouse_drag")
+            import pyautogui
+            x, y = coordinate
+            curr_x, curr_y = pyautogui.position()
+            await asyncio.to_thread(pyautogui.mouseDown)
+            await asyncio.to_thread(
+                pyautogui.moveTo,
+                x, y,
+                duration=duration or 0.5,
+                tween=pyautogui.easeInOutQuad
+            )
+            await asyncio.to_thread(pyautogui.mouseUp)
+            return ToolResult(output=f"Dragged from ({curr_x}, {curr_y}) to ({x}, {y})")
+            
+        elif action == "mouse_scroll":
+            if not coordinate:
+                raise ToolError("coordinate required for mouse_scroll")
+            import pyautogui
+            clicks = coordinate[0]  # Positive for up, negative for down
+            await asyncio.to_thread(pyautogui.scroll, clicks)
+            direction = "up" if clicks > 0 else "down"
+            return ToolResult(output=f"Scrolled {abs(clicks)} clicks {direction}")
+            
         raise ToolError(f"Unknown action: {action}")
         
     async def _run_applescript(self, script: str) -> str:
@@ -163,7 +212,11 @@ class AdvancedComputerTool(BaseAnthropicTool):
                             "get_clipboard",
                             "set_clipboard",
                             "press_key_sequence",
-                            "smooth_mouse_move"
+                            "smooth_mouse_move",
+                            "get_cursor_info",
+                            "relative_mouse_move", 
+                            "mouse_drag",
+                            "mouse_scroll"
                         ]
                     },
                     "window_id": {"type": "string"},
