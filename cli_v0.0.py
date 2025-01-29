@@ -13,9 +13,19 @@ import threading
 import base64
 import signal
 import argparse
+import os
 from typing import Optional, Dict, Any
 from pathlib import Path
 from queue import Queue, Empty
+
+from computer_use_demo.tools import ToolCollection, ComputerTool, BashTool, EditTool
+
+# Initialize tool collection
+tool_collection = ToolCollection(
+    ComputerTool(),
+    BashTool(),
+    EditTool(),
+)
 
 from utils import (
     console,
@@ -335,7 +345,23 @@ async def handle_server_events(ws):
                     if (STATE.response_state == ResponseState.RESPONDING and 
                         event["response_id"] == STATE.current_response_id):
                         text_accumulator.update(event["delta"])
-                        print(event["delta"], end='', flush=True)  # Print assistant response in real-time
+                        print(event["delta"], end='', flush=True)
+
+                elif event_type == "tool_use":
+                    print(f"\nUsing tool: {event['name']}")
+                    result = await tool_collection.run(
+                        name=event['name'],
+                        tool_input=event['input']
+                    )
+                    if result.output:
+                        print(f"> Tool Output: {result.output}")
+                    if result.error:
+                        print(f"!!! Tool Error: {result.error}")
+                    if result.base64_image:
+                        os.makedirs("screenshots", exist_ok=True)
+                        with open(f"screenshots/screenshot_{event['id']}.png", "wb") as f:
+                            f.write(base64.b64decode(result.base64_image))
+                        print(f"Took screenshot screenshot_{event['id']}.png")
 
                 elif event_type == "response.audio_transcript.delta":
                     if (STATE.response_state == ResponseState.RESPONDING and 
