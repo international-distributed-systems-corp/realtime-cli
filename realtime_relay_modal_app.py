@@ -111,7 +111,7 @@ from modal import Secret
 @app.function(secrets=[Secret.from_name("distributed-systems")])
 async def create_ephemeral_token(session_config: dict) -> str:
     """Create ephemeral token for Realtime API access."""
-    async def _create_token():
+    try:
         payload = {
             k: session_config[k]
             for k in [
@@ -134,11 +134,49 @@ async def create_ephemeral_token(session_config: dict) -> str:
         async with httpx.AsyncClient() as client:
             resp = await client.post(url, headers=headers, json=payload)
         if resp.status_code != 200:
-            raise RuntimeError(f"Failed ephemeral token: {resp.text}")
+            error_data = resp.json()
+            error_message = error_data.get('error', {}).get('message', resp.text)
+            raise RuntimeError(f"Failed to create ephemeral token: {error_message}")
         data = resp.json()
-        return data["client_secret"]["value"]
+        return data.get("client_secret", {}).get("value")
     
-    return await _create_token()
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        if not openai_api_key:
+            raise RuntimeError("OPENAI_API_KEY environment variable is not set")
+            
+        url = "https://api.openai.com/v1/realtime/tokens"
+        headers = {
+            "Authorization": f"Bearer {openai_api_key}",
+            "Content-Type": "application/json",
+            "OpenAI-Beta": "realtime=v1"
+        }
+        
+        payload = {
+            k: session_config[k]
+            for k in [
+                "model", "modalities", "instructions", "voice",
+                "input_audio_format", "output_audio_format",
+                "input_audio_transcription", "turn_detection",
+                "tools", "tool_choice", "temperature",
+                "max_response_output_tokens"
+            ]
+            if k in session_config
+        }
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(url, headers=headers, json=payload)
+            
+        if resp.status_code != 200:
+            error_data = resp.json()
+            error_message = error_data.get('error', {}).get('message', resp.text)
+            raise RuntimeError(f"Failed to create ephemeral token: {error_message}")
+            
+        data = resp.json()
+        return data.get("client_secret", {}).get("value")
+        
+    except Exception as e:
+        logger.error(f"Token creation failed: {str(e)}")
+        raise RuntimeError(f"Failed to create ephemeral token: {str(e)}")
 
 class ConnectionManager:
     def __init__(self):

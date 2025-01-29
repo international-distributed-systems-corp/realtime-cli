@@ -409,8 +409,11 @@ async def main():
                     if event.get("type") == "session.created":
                         break
                     elif event.get("type") == "error":
-                        error_msg = event.get('error', {}).get('message', 'Unknown error')
-                        raise Exception(f"Session initialization failed: {error_msg}")
+                        error_data = event.get('error', {})
+                        error_msg = error_data.get('message', 'Unknown error')
+                        error_type = error_data.get('type', 'unknown')
+                        print(f"\nError during session initialization: {error_type} - {error_msg}")
+                        return
             except Exception as e:
                 print(f"\nError during session initialization: {str(e)}")
                 return
