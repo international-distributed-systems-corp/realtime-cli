@@ -183,6 +183,7 @@ from pathlib import Path
 
 # Get current directory for mounting
 CURRENT_DIR = Path(__file__).parent
+import dotenv
 
 # Create Modal app and image
 # Load environment variables
@@ -191,7 +192,7 @@ load_dotenv()
 app = App("realtime-relay")
 image = (
     Image.debian_slim()
-    .pip_install(["fastapi", "uvicorn", "websockets>=12.0", "requests", "python-multipart", "python-jose[cryptography]", "passlib", "jinja2"])
+    .pip_install(["fastapi", "uvicorn", "python-dotenv", "websockets>=12.0", "requests", "python-multipart", "python-jose[cryptography]", "passlib", "jinja2"])
     # Mount the templates directory
     .add_local_dir(
         str(CURRENT_DIR / "templates"),
