@@ -1,6 +1,7 @@
 import sys
 import json
 import time
+import asyncio
 from typing import Optional, Dict, Any
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
