@@ -81,17 +81,12 @@ templates = Jinja2Templates(directory=str(templates_dir))
 # Mount static files with absolute path and name
 web_app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-# Add route for static files
-@web_app.get("/static/{file_path:path}")
-async def static_files(file_path: str):
-    return FileResponse(str(static_dir / file_path))
-
 @web_app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """Serve the main chat interface"""
     return templates.TemplateResponse(
         "chat.html",
-        {"request": request, "url_for": request.url_for}
+        {"request": request}
     )
 
 # User models and database
