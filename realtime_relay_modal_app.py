@@ -1,24 +1,8 @@
-import asyncio
-import json
-import logging
-import uuid
-import os
-import time
-import websockets
-import requests
-from db import init_db, get_user_by_api_key, record_usage
-from datetime import datetime
+
 from modal import Image, App, asgi_app
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.security import HTTPAuthorizationCredentials
-from typing import List, Optional
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 # Create FastAPI app with WebSocket support
 web_app = FastAPI(
@@ -29,18 +13,42 @@ web_app = FastAPI(
     root_path_in_servers=False
 )
 
-# Initialize database
-init_db()
 
 # Create Modal app and image
 app = App("realtime-relay")
 image = (
     Image.debian_slim()
     .pip_install([
-        "fastapi", "uvicorn", "websockets>=12.0", "requests", "python-multipart",
-        "motor>=3.3.0", "bcrypt", "pydantic[email]", "pymongo>=4.5.0"
+        "fastapi", "uvicorn", "websockets>=14.2", "requests", "python-multipart", "modal",
+        "motor>=3.3.0", "bcrypt", "pydantic[email]", "pymongo>=4.5.0", "asyncio"
     ])
 )
+
+import asyncio
+import json
+import logging
+import uuid
+import os
+import time
+import websockets
+import requests
+
+
+from db import init_db, get_user_by_api_key, record_usage
+
+# Initialize database
+init_db()
+
+from datetime import datetime
+from typing import List, Optional
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 
 class RealtimeRelay:
     """
