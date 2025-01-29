@@ -2,7 +2,7 @@
 Proxy tool that allows GPT-4 to delegate tasks to Claude
 """
 from typing import ClassVar, Literal
-from anthropic.types.beta import BetaToolFunctionParam
+from anthropic.types.beta import BetaToolUnionParam
 
 from .base import BaseAnthropicTool, ToolResult
 from .collection import ToolCollection
@@ -29,7 +29,7 @@ class GPT4ProxyTool(BaseAnthropicTool):
             output=f"Instruction received: {instruction}\nClaude will execute this and report back."
         )
 
-    def to_params(self) -> BetaToolFunctionParam:
+    def to_params(self) -> BetaToolUnionParam:
         return {
             "name": self.name,
             "description": "Delegate computer control tasks to Claude, who has direct access to the computer tools",

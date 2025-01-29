@@ -67,3 +67,19 @@ class ToolError(Exception):
 
     def __init__(self, message):
         self.message = message
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class ToolResult:
+    """Result from running a tool"""
+    output: str
+    error: Optional[str] = None
+    base64_image: Optional[str] = None
+
+@dataclass
+class CLIResult:
+    """Result from running a CLI command"""
+    stdout: str
+    stderr: str
+    returncode: int
