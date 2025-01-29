@@ -16,6 +16,7 @@ from passlib.context import CryptContext
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
@@ -79,6 +80,11 @@ templates = Jinja2Templates(directory=str(templates_dir))
 
 # Mount static files with absolute path and name
 web_app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+# Add route for static files
+@web_app.get("/static/{file_path:path}")
+async def static_files(file_path: str):
+    return FileResponse(str(static_dir / file_path))
 
 @web_app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
