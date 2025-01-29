@@ -19,8 +19,8 @@ app = App("realtime-relay")
 image = (
     Image.debian_slim()
     .pip_install([
-        "fastapi", "uvicorn", "websockets>=14.2", "requests", "python-multipart", "modal",
-        "motor>=3.3.0", "bcrypt", "pydantic[email]", "pymongo>=4.5.0", "asyncio"
+        "fastapi", "uvicorn", "websockets==12.0", "requests", "python-multipart", "modal",
+        "motor>=3.3.0", "bcrypt", "pydantic[email]", "pymongo>=4.5.0", "asyncio", "websockets"
     ])
 )
 
