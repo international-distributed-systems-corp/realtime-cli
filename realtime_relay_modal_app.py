@@ -62,8 +62,16 @@ web_app = FastAPI(
 )
 
 # Set up templates and static files
+import os
+from pathlib import Path
+
+# Create static directory if it doesn't exist
+static_dir = Path("static")
+static_dir.mkdir(exist_ok=True)
+
 templates = Jinja2Templates(directory="templates")
-web_app.mount("/static", StaticFiles(directory="static"), name="static")
+if static_dir.exists():
+    web_app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 @web_app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
