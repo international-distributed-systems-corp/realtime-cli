@@ -332,7 +332,7 @@ async def websocket_endpoint(websocket: WebSocket):
             await relay.close()
         logger.info("Cleaning up WebSocket connection")
 
-@app.asgi_app(label="realtime-relay")
+@app.asgi_app()
 def fastapi_app():
     """ASGI app for handling WebSocket connections"""
     return web_app
