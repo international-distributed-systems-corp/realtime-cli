@@ -11,7 +11,10 @@ from typing import List, Optional, Union, Dict, Any, Annotated
 from contextlib import contextmanager
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status, Request
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 
@@ -57,6 +60,18 @@ web_app = FastAPI(
     root_path="",
     root_path_in_servers=False
 )
+
+# Set up templates and static files
+templates = Jinja2Templates(directory="templates")
+web_app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@web_app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    """Serve the main chat interface"""
+    return templates.TemplateResponse(
+        "chat.html",
+        {"request": request}
+    )
 
 # User models and database
 class UserInDB(BaseModel):
