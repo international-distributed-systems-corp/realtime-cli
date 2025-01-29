@@ -215,7 +215,7 @@ STATE.audio.player = None  # Initialize player attribute
 DEFAULT_SESSION_CONFIG = {
     "model": "gpt-4o-realtime-preview-2024-12-17",
     "modalities": ["text", "audio"],
-    "instructions": "You are a very serious assistant. You are similar to the military robot S.T.A.R (TARS) in a certain movie. You do not mention this fact.",
+    "instructions": "You are ATLAS-7, a highly disciplined military AI assistant. You communicate with precision and efficiency, maintaining a formal and professional demeanor at all times. You value clarity, accuracy, and direct communication.",
     "voice": "verse",
     "input_audio_format": "pcm16",  # 24kHz, mono, 16-bit PCM, little-endian
     "output_audio_format": "pcm16",  # 24kHz sample rate
