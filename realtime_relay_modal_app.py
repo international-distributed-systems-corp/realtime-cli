@@ -368,7 +368,7 @@ async def websocket_endpoint(websocket: WebSocket):
     """Handle WebSocket connections with proper lifecycle management"""
     relay = None
     try:
-        await websocket.accept()
+        await manager.connect(websocket)
         logger.info("New WebSocket connection accepted")
 
         # Send connection acknowledgment
@@ -377,19 +377,40 @@ async def websocket_endpoint(websocket: WebSocket):
             "timestamp": str(datetime.now())
         }))
 
-        # Wait for init message
-        data = await websocket.receive_text()
-        init_msg = json.loads(data)
+        while True:
+            try:
+                # Wait for messages
+                data = await websocket.receive_text()
+                msg = json.loads(data)
 
-        if init_msg.get("type") != "init_session":
-            await websocket.send_text(json.dumps({
-                "type": "error",
-                "error": {
-                    "code": "invalid_init",
-                    "message": "First message must be init_session"
-                }
-            }))
-            return
+                if msg.get("type") == "init_session":
+                    # Handle initialization
+                    session_config = msg.get("session_config", {})
+                    try:
+                        token = create_ephemeral_token.local(session_config)
+                        relay = RealtimeRelay(token, session_config)
+                        await relay.connect_upstream()
+                        await handle_client(websocket, relay)
+                    except Exception as e:
+                        await websocket.send_text(json.dumps({
+                            "type": "error",
+                            "error": {
+                                "code": "relay_init_failed",
+                                "message": str(e)
+                            }
+                        }))
+                else:
+                    # Handle regular messages
+                    await websocket.send_text(json.dumps({
+                        "type": "message",
+                        "sender": "Server",
+                        "text": f"Received: {msg.get('text', '')}"
+                    }))
+            except json.JSONDecodeError:
+                await websocket.send_text(json.dumps({
+                    "type": "error",
+                    "error": {"message": "Invalid JSON message"}
+                }))
 
         # Create relay connection
         session_config = init_msg.get("session_config", {})

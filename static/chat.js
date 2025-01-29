@@ -6,25 +6,40 @@ function connect() {
     ws.onopen = () => {
         console.log('Connected to WebSocket');
         appendMessage('System', 'Connected to chat server');
+        // Send init message
+        ws.send(JSON.stringify({
+            type: 'init_session',
+            session_config: {
+                model: 'gpt-4',
+                modalities: ['text']
+            }
+        }));
     };
 
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'message') {
             appendMessage(data.sender, data.text);
+        } else if (data.type === 'error') {
+            console.error('Server error:', data.error);
+            appendMessage('System', 'Error: ' + data.error.message);
+        } else if (data.type === 'connection.established') {
+            console.log('Connection established:', data);
         }
     };
 
-    ws.onclose = () => {
-        console.log('Disconnected from WebSocket');
+    ws.onclose = (event) => {
+        console.log('WebSocket closed:', event.code, event.reason);
         appendMessage('System', 'Disconnected from chat server');
-        // Attempt to reconnect
-        setTimeout(connect, 1000);
+        // Only attempt reconnect if not a normal closure
+        if (event.code !== 1000) {
+            setTimeout(connect, 3000);
+        }
     };
 
     ws.onerror = (error) => {
         console.error('WebSocket error:', error);
-        appendMessage('System', 'Error: ' + error.message);
+        appendMessage('System', 'Connection error occurred');
     };
 }
 
