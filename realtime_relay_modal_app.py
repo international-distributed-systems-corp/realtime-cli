@@ -65,20 +65,25 @@ web_app = FastAPI(
 import os
 from pathlib import Path
 
-# Create static directory if it doesn't exist
-static_dir = Path("static")
-static_dir.mkdir(exist_ok=True)
+# Get current directory
+current_dir = Path(__file__).parent
 
-templates = Jinja2Templates(directory="templates")
-if static_dir.exists():
-    web_app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+# Set up templates and static directories
+templates_dir = current_dir / "templates"
+static_dir = current_dir / "static"
+
+# Configure templates with absolute path
+templates = Jinja2Templates(directory=str(templates_dir))
+
+# Mount static files with absolute path and name
+web_app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 @web_app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """Serve the main chat interface"""
     return templates.TemplateResponse(
         "chat.html",
-        {"request": request}
+        {"request": request, "url_for": request.url_for}
     )
 
 # User models and database
