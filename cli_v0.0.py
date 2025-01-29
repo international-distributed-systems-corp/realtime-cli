@@ -392,7 +392,7 @@ async def main():
             # Set up signal handler
             loop = asyncio.get_event_loop()
             def interrupt_handler():
-                asyncio.create_task(handle_interrupt(ws))
+                loop.create_task(handle_interrupt(ws))
             loop.add_signal_handler(signal.SIGINT, interrupt_handler)
             
             # Initialize session
