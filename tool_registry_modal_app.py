@@ -14,13 +14,9 @@ image = (
         "uvicorn>=0.15.0", 
         "pydantic>=1.8.0",
         "neo4j>=5.0.0",
-        "python-dotenv>=0.19.0"
+        "python-dotenv>=0.19.0",
+        "httpx"
     ])
-    .env({
-        "NEO4J_URI": "neo4j://bolt.n4j.distributed.systems",
-        "NEO4J_USER": "neo4j",
-        "NEO4J_PASSWORD": "Backstab2025!"
-    })
 )
 
 # Create Modal app
