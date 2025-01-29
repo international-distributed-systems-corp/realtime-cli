@@ -236,6 +236,11 @@ class RealtimeRelay:
         if self.upstream_ws:
             await self.upstream_ws.close()
 
+from modal import Secret
+
+@app.function(
+    secrets=[Secret.from_name("distributed-systems")]
+)
 def create_ephemeral_token(session_config: dict) -> str:
     """Create ephemeral token for Realtime API access."""
     payload = {
@@ -250,6 +255,7 @@ def create_ephemeral_token(session_config: dict) -> str:
         if k in session_config
     }
     openai_api_key = os.getenv('OPENAI_API_KEY')
+    print(openai_api_key)
     if not openai_api_key:
         raise RuntimeError("OPENAI_API_KEY environment variable is not set")
     url = "https://api.openai.com/v1/realtime/sessions"
@@ -389,7 +395,7 @@ async def websocket_endpoint(websocket: WebSocket):
         # Create relay connection
         session_config = init_msg.get("session_config", {})
         try:
-            token = create_ephemeral_token(session_config)
+            token = create_ephemeral_token.local(session_config)
             relay = RealtimeRelay(token, session_config)
             await relay.connect_upstream()
             
@@ -440,6 +446,7 @@ def init_db():
     allow_concurrent_inputs=True,
     timeout=600,
     container_idle_timeout=300,
+    secrets=[Secret.from_name("distributed-systems")]
 )
 @asgi_app(label="realtime-relay")
 def fastapi_app():
