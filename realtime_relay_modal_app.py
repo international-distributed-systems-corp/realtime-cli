@@ -239,7 +239,15 @@ async def handle_client(websocket: WebSocket, relay: Optional[RealtimeRelay] = N
         async def relay_upstream_to_local():
             try:
                 async for data_str in relay.upstream_ws:
-                    await websocket.send_text(data_str)
+                    data = json.loads(data_str)
+                    # Handle binary audio data if present
+                    if data.get("type") == "audio" and "data" in data:
+                        audio_data = data["data"]
+                        # Send binary audio data as a binary websocket message
+                        await websocket.send_bytes(audio_data.encode('utf-8'))
+                    else:
+                        # Send other messages as text
+                        await websocket.send_text(data_str)
             except websockets.ConnectionClosed:
                 pass
 
