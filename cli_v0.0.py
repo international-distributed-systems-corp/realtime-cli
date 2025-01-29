@@ -336,6 +336,11 @@ async def handle_server_events(ws):
                         event["response_id"] == STATE.current_response_id):
                         text_accumulator.update(event["delta"])
                         print(event["delta"], end='', flush=True)  # Print assistant response in real-time
+
+                elif event_type == "response.audio_transcript.delta":
+                    if (STATE.response_state == ResponseState.RESPONDING and 
+                        event["response_id"] == STATE.current_response_id):
+                        print(f"Assistant transcript: {event['delta']}", end='', flush=True)
                         
                 elif event_type == "response.audio.delta":
                     if (STATE.response_state == ResponseState.RESPONDING and 
