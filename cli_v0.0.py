@@ -196,7 +196,7 @@ class AudioManager:
         self.p.terminate()
 
 # Configuration
-RELAY_SERVER_URL = "wss://realtime-relay-dev.modal.run/ws"  # Dev relay server
+RELAY_SERVER_URL = "wss://arthurcolle--realtime-relay-dev.modal.run/ws"  # Dev relay server
 AUDIO_CHUNK = 1024
 FORMAT = pyaudio.paFloat32
 CHANNELS = 1
