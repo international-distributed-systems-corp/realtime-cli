@@ -374,7 +374,7 @@ async def handle_server_events(ws):
 
                 elif event_type == "tool_use":
                     print(f"\nUsing tool: {event['name']}")
-                    result = await tool_collection.run(
+                    result = await gpt4_tools.run(
                         name=event['name'],
                         tool_input=event['input']
                     )
