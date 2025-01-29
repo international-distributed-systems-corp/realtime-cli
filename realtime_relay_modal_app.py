@@ -1,5 +1,7 @@
 import asyncio
 import json
+import os
+from dotenv import load_dotenv
 import logging
 import uuid
 import os
@@ -183,6 +185,9 @@ from pathlib import Path
 CURRENT_DIR = Path(__file__).parent
 
 # Create Modal app and image
+# Load environment variables
+load_dotenv()
+
 app = App("realtime-relay")
 image = (
     Image.debian_slim()
@@ -243,7 +248,9 @@ def create_ephemeral_token(session_config: dict) -> str:
         ]
         if k in session_config
     }
-    openai_api_key = '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'
+    openai_api_key = os.getenv('OPENAI_API_KEY')
+    if not openai_api_key:
+        raise RuntimeError("OPENAI_API_KEY environment variable is not set")
     url = "https://api.openai.com/v1/realtime/sessions"
     headers = {
         "Authorization": f"Bearer {openai_api_key}",
