@@ -1,4 +1,4 @@
-import httpx
+
 from modal import Image, App, asgi_app
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
@@ -18,13 +18,14 @@ app = App("realtime-relay")
 image = (
     Image.debian_slim()
     .pip_install([
-        "fastapi", "uvicorn", "websockets==12.0", "requests", "python-multipart", "modal",
+        "fastapi", "uvicorn", "websockets==12.0", "requests", "python-multipart", "modal", "httpx",
         "motor>=3.3.0", "bcrypt", "pydantic[email]", "pymongo>=4.5.0", "asyncio", "websockets", "requests"
     ])
 )
 
 import asyncio
 import json
+
 import logging
 import uuid
 import os
@@ -40,6 +41,13 @@ try:
 except ImportError:
     os.system('pip install websockets')
     import websockets
+
+try:
+    import httpx
+except ImportError:
+    os.system('pip install httpx')
+    import httpx
+
 from db import init_db, get_user_by_api_key, record_usage
 
 # Initialize database
