@@ -78,7 +78,7 @@ static_dir = current_dir / "static"
 templates = Jinja2Templates(directory=str(templates_dir))
 
 # Mount static files with absolute path and name
-web_app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+web_app.mount("/static", StaticFiles(directory="/root/static"), name="static")
 
 @web_app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -236,7 +236,7 @@ class RealtimeRelay:
         if self.upstream_ws:
             await self.upstream_ws.close()
 
-from modal import Secret
+from modal import Secret, Mount
 
 @app.function(
     secrets=[Secret.from_name("distributed-systems")]
@@ -446,7 +446,11 @@ def init_db():
     allow_concurrent_inputs=True,
     timeout=600,
     container_idle_timeout=300,
-    secrets=[Secret.from_name("distributed-systems")]
+    secrets=[Secret.from_name("distributed-systems")],
+    mounts=[
+        Mount.from_local_dir("static", remote_path="/root/static"),
+        Mount.from_local_dir("templates", remote_path="/root/templates")
+    ]
 )
 @asgi_app(label="realtime-relay")
 def fastapi_app():
