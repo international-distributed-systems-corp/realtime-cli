@@ -3,6 +3,7 @@ import json
 import logging
 import uuid
 import os
+import sqlite3
 import websockets
 import requests
 from datetime import datetime, timedelta
@@ -10,6 +11,9 @@ from typing import List, Optional, Union, Dict, Any, Annotated
 from contextlib import contextmanager
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel
 from modal import Image, App, asgi_app
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from typing import List, Optional
@@ -28,6 +32,18 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Database configuration
+DATABASE_URL = "realtime.db"
+
+@contextmanager
+def get_db():
+    """Get database connection"""
+    conn = sqlite3.connect(DATABASE_URL)
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 # Create FastAPI app with WebSocket support
 web_app = FastAPI(
