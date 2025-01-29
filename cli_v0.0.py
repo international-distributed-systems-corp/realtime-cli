@@ -417,7 +417,11 @@ async def main():
                 elif event.get("type") != "session.created":
                     # Don't fail immediately, let the event handler process it
                     print(f"Note: First event was {event.get('type')} instead of session.created")
-            
+            except asyncio.TimeoutError:
+                raise Exception("Session initialization timed out")
+            except Exception as e:
+                raise Exception(f"Session initialization failed: {str(e)}")
+
             # Run conversation and event handling loops
             done, pending = await asyncio.wait(
                 [
