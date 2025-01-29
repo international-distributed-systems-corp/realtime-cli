@@ -12,6 +12,7 @@ import base64
 from queue import Queue, Empty
 from typing import Optional
 from enum import Enum, auto
+from computer_use_demo.tools import ToolCollection, ComputerTool, BashTool, EditTool
 
 # Configure logging
 logging.basicConfig(
@@ -155,6 +156,32 @@ async def handle_server_events(ws):
                         
                 elif event_type == "conversation.item.input_audio_transcription.completed":
                     print(f"\nYou: {event['transcript']}")
+                    
+                elif event_type == "tool_use":
+                    # Handle tool use
+                    result = await tool_collection.run(
+                        name=event["name"],
+                        tool_input=event["input"]
+                    )
+                    
+                    # Send tool result back
+                    await ws.send(json.dumps({
+                        "type": "tool_result",
+                        "tool_use_id": event["id"],
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": result.output or result.error or ""
+                            }
+                        ] + ([{
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/png",
+                                "data": result.base64_image
+                            }
+                        }] if result.base64_image else [])
+                    }))
                 
             except json.JSONDecodeError:
                 logger.error(f"Invalid JSON: {msg_str}")
