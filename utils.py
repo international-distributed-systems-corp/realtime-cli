@@ -30,6 +30,7 @@ class StreamingTextAccumulator:
     def __init__(self):
         self.buffer = []
         self.live = Live("", refresh_per_second=4)
+        self.transcript = ""
         
     def start(self):
         self.live.start()
