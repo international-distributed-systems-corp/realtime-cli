@@ -14,6 +14,10 @@ from passlib.context import CryptContext
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
 from modal import Image, App, asgi_app
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from typing import List, Optional
