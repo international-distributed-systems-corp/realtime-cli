@@ -107,7 +107,8 @@ async def create_ephemeral_token(session_config: dict) -> str:
         "OpenAI-Beta": "realtime=v1"
     }
 
-    resp = requests.post(url, headers=headers, json=payload)
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, headers=headers, json=payload)
     if resp.status_code != 200:
         raise RuntimeError(f"Failed ephemeral token: {resp.text}")
     data = resp.json()

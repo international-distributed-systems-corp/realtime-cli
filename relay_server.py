@@ -56,7 +56,7 @@ async def initialize_tool_registry():
     #     print("Continuing without tool support...")
     pass
 
-def create_ephemeral_token(session_config: dict) -> str:
+async def create_ephemeral_token(session_config: dict) -> str:
     """
     Uses your standard OpenAI API key to request an ephemeral Realtime token.
     Strips out any non-supported fields from session config.
@@ -165,7 +165,7 @@ async def handle_client(client_ws):
 
         session_config = init_msg.get("session_config", {})
         try:
-            ephemeral_token = create_ephemeral_token(session_config)
+            ephemeral_token = await create_ephemeral_token(session_config)
         except Exception as e:
             error_event = {
                 "event_id": f"evt_{uuid.uuid4().hex[:6]}",
