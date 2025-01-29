@@ -5,7 +5,11 @@ import uuid
 import os
 import websockets
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import List, Optional, Union, Dict, Any, Annotated
+from contextlib import contextmanager
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 from modal import Image, App, asgi_app
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from typing import List, Optional
@@ -17,6 +21,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Security configuration
+SECRET_KEY = os.getenv("APP_SECRET_KEY", "your-secret-key-here")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
 # Create FastAPI app with WebSocket support
 web_app = FastAPI(
     title="Realtime Relay",
@@ -25,6 +37,97 @@ web_app = FastAPI(
     root_path="",
     root_path_in_servers=False
 )
+
+# User models and database
+class UserInDB(BaseModel):
+    email: str
+    hashed_password: str
+    is_superuser: bool = False
+
+class UserCreate(BaseModel):
+    email: str
+    password: str
+
+def get_user(email: str) -> Optional[UserInDB]:
+    """Get user from database by email"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+        user = cursor.fetchone()
+        if user:
+            return UserInDB(**user)
+    return None
+
+def create_user(user: UserCreate) -> UserInDB:
+    """Create new user in database"""
+    hashed_password = pwd_context.hash(user.password)
+    is_superuser = user.email.endswith("@brainchain.ai")
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO users (email, hashed_password, is_superuser) VALUES (?, ?, ?)",
+            (user.email, hashed_password, is_superuser)
+        )
+        conn.commit()
+        
+    return UserInDB(
+        email=user.email,
+        hashed_password=hashed_password,
+        is_superuser=is_superuser
+    )
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify password against hash"""
+    return pwd_context.verify(plain_password, hashed_password)
+
+def authenticate_user(email: str, password: str) -> Optional[UserInDB]:
+    """Authenticate user by email and password"""
+    user = get_user(email)
+    if not user or not verify_password(password, user.hashed_password):
+        return None
+    return user
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """Create JWT access token"""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> UserInDB:
+    """Get current user from JWT token"""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+        
+    user = get_user(email)
+    if user is None:
+        raise credentials_exception
+    return user
+
+async def get_current_superuser(
+    current_user: Annotated[UserInDB, Depends(get_current_user)]
+) -> UserInDB:
+    """Check if current user is superuser"""
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough privileges"
+        )
+    return current_user
 
 # Create Modal app and image
 app = App("realtime-relay")
@@ -138,6 +241,42 @@ async def handle_client(websocket: WebSocket, relay: Optional[RealtimeRelay] = N
         except:
             pass
 
+@web_app.post("/register", response_model=dict)
+async def register(user: UserCreate):
+    """Register new user"""
+    db_user = get_user(user.email)
+    if db_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    user = create_user(user)
+    return {"message": "User registered successfully"}
+
+@web_app.post("/token")
+async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+    """Login user and return access token"""
+    user = authenticate_user(form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@web_app.get("/users/me", response_model=dict)
+async def read_users_me(current_user: Annotated[UserInDB, Depends(get_current_user)]):
+    """Get current user info"""
+    return {
+        "email": current_user.email,
+        "is_superuser": current_user.is_superuser
+    }
+
 @web_app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """Handle WebSocket connections with proper lifecycle management"""
@@ -196,6 +335,24 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info("Cleaning up WebSocket connection")
 
 # add endpoint 
+# Initialize database tables
+def init_db():
+    """Initialize database tables"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # Create users table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            hashed_password TEXT NOT NULL,
+            is_superuser BOOLEAN NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+        conn.commit()
+
 @app.function(
     image=image,
     keep_warm=1,
