@@ -409,7 +409,11 @@ async def handle_server_events(ws):
                 elif event_type == "response.audio_transcript.delta":
                     if (STATE.response_state == ResponseState.RESPONDING and 
                         event["response_id"] == STATE.current_response_id):
-                        print(f"Assistant transcript: {event['delta']}", end='', flush=True)
+                        text_accumulator.transcript += event['delta']
+                        # Clear screen and redisplay full transcript
+                        print("\033[H\033[J")  # Clear screen
+                        print("\nYou: [Listening...]")
+                        print(f"\nAssistant Transcript:\n{text_accumulator.transcript}")
                         
                 elif event_type == "response.audio.delta":
                     if (STATE.response_state == ResponseState.RESPONDING and 
@@ -424,6 +428,7 @@ async def handle_server_events(ws):
                 elif event_type == "response.done":
                     if STATE.response_state == ResponseState.RESPONDING:
                         text_accumulator.stop()
+                        text_accumulator.transcript = ""  # Clear transcript for next response
                         print("\n")  # Add newline after assistant response
                         STATE.current_response_id = None
                         STATE.response_state = ResponseState.IDLE
