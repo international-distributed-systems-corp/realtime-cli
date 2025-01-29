@@ -1,4 +1,3 @@
-
 from modal import Image, App, asgi_app
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
@@ -13,14 +12,13 @@ web_app = FastAPI(
     root_path_in_servers=False
 )
 
-
 # Create Modal app and image
 app = App("realtime-relay")
 image = (
     Image.debian_slim()
     .pip_install([
         "fastapi", "uvicorn", "websockets==12.0", "requests", "python-multipart", "modal",
-        "motor>=3.3.0", "bcrypt", "pydantic[email]", "pymongo>=4.5.0", "asyncio", "websockets"
+        "motor>=3.3.0", "bcrypt", "pydantic[email]", "pymongo>=4.5.0", "asyncio", "websockets", "requests"
     ])
 )
 
@@ -30,10 +28,17 @@ import logging
 import uuid
 import os
 import time
-import websockets
-import requests
+try:
+    import requests
+except ImportError:
+    os.system('pip install requests')
+    import requests
 
-
+try:
+    import websockets
+except ImportError:
+    os.system('pip install websockets')
+    import websockets
 from db import init_db, get_user_by_api_key, record_usage
 
 # Initialize database

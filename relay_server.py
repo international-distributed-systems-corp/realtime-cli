@@ -1,59 +1,43 @@
+# +-----------------------------------------+
+# | relay_server.py                         |
+# +-----------------------------------------+
 import os
 import json
 import asyncio
 import websockets
 import requests
-import logging
-import signal
-from datetime import datetime
-
-# Configure structured logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-logger = logging.getLogger(__name__)
-
-# Define event types
-SERVER_EVENTS = {
-    'server.start': 'Server started',
-    'server.stop': 'Server stopped',
-    'client.connect': 'Client connected',
-    'client.disconnect': 'Client disconnected',
-    'session.create': 'Session created',
-    'session.end': 'Session ended',
-    'error.token': 'Token error',
-    'error.connection': 'Connection error',
-    'error.relay': 'Relay error'
-}
-
-CLIENT_EVENTS = {
-    'init_session': 'Session initialization',
-    'function.call': 'Function call',
-    'function.response': 'Function response',
-    'error': 'Error event',
-    'rate_limits.updated': 'Rate limits updated',
-    'session.created': 'Session created'
-}
 import uuid
-import aiohttp
-from typing import Optional, List, Dict, Any
+from typing import Optional
 
-from tool_registry_client import ToolRegistryClient
+# Import Modal mount and other dependencies
+from modal import Mount
+
+# from tool_registry import ToolRegistry, Tool
 
 ################################################################################
 # Configuration
 ################################################################################
 
-# API endpoints
-TOOL_REGISTRY_URL = "https://arthurcolle--tools.modal.run"
+# Required environment variables
+REQUIRED_ENV_VARS = {
+    "OPENAI_API_KEY": "OpenAI API key for creating ephemeral tokens",
+    "TOOL_REGISTRY_URL": "URL of the Tool Registry service",
+}
 
-# The standard API key that can create ephemeral tokens.
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    print("Error: Set OPENAI_API_KEY in your environment.")
-    exit(1)
+# # Check for required environment variables
+# missing_vars = []
+# for var, description in REQUIRED_ENV_VARS.items():
+#     if not os.environ.get(var):
+#         missing_vars.append(f"{var} - {description}")
+
+# if missing_vars:
+#     print("Error: Missing required environment variables:")
+#     for var in missing_vars:
+#         print(f"- {var}")
+#     exit(1)
+
+# # Initialize Tool Registry
+# tool_registry = ToolRegistry()
 
 # The port on which our local relay will listen for the CLI:
 LOCAL_SERVER_PORT = 9000
@@ -63,15 +47,14 @@ LOCAL_SERVER_PORT = 9000
 ################################################################################
 
 async def initialize_tool_registry():
-    """Initialize the Tool Registry client"""
-    try:
-        # Create client instance
-        tool_registry = ToolRegistryClient(base_url=TOOL_REGISTRY_URL)
-        logger.debug("Tool Registry client initialized")
-        return tool_registry
-    except Exception as e:
-        logger.warning(f"Failed to initialize Tool Registry client: {e}")
-        return None
+    # """Initialize and load tools from the registry"""
+    # try:
+    #     await tool_registry.connect(TOOL_REGISTRY_URL)
+    #     print("Tool Registry initialized successfully")
+    # except Exception as e:
+    #     print(f"Warning: Failed to initialize Tool Registry: {e}")
+    #     print("Continuing without tool support...")
+    pass
 
 def create_ephemeral_token(session_config: dict) -> str:
     """
@@ -94,7 +77,8 @@ def create_ephemeral_token(session_config: dict) -> str:
     url = "https://api.openai.com/v1/realtime/sessions"
     headers = {
         "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "OpenAI-Beta": "realtime=v1"
     }
     
     resp = requests.post(url, headers=headers, json=payload)
@@ -106,18 +90,6 @@ def create_ephemeral_token(session_config: dict) -> str:
 ################################################################################
 # Relay Connection
 ################################################################################
-
-async def list_tools() -> List[Dict[str, Any]]:
-    """List all available tools from the registry"""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{TOOL_REGISTRY_URL}/tools") as response:
-                if response.status == 200:
-                    return await response.json()
-                return []
-    except Exception as e:
-        logger.warning(f"Failed to fetch tools: {e}")
-        return []
 
 class RealtimeRelay:
     """
@@ -134,47 +106,36 @@ class RealtimeRelay:
         """
         Connect to the Realtime API over WebSocket using ephemeral token.
         """
-        # Build the Realtime wss URL with proper hostname and path
-        base_url = "wss://api.openai.com/v1/realtime/chat"
-        
-        # Configure WebSocket connection
+        # Build the Realtime wss URL
+        # We can append "?model=..." if not specified in the session config.
+        # But if session_config includes "model", the ephemeral session should
+        # already be locked to that model. It's optional to pass again in the URL.
+        base_url = "wss://api.openai.com/v1/realtime"
+        # For safety, specify the model if we know it:
+        model = self.session_config.get("model", None)
+        if model:
+            base_url += f"?model={model}"
+
         headers = {
             "Authorization": f"Bearer {self.ephemeral_token}",
-            "Content-Type": "application/json",
-            "User-Agent": "OpenAI-Realtime-Client/1.0"
+            "OpenAI-Beta": "realtime=v1"
         }
 
-        try:
-            logger.info(f"Connecting to {base_url}...")
-            self.upstream_ws = await websockets.connect(
-                base_url,
-                extra_headers=headers,
-                ping_interval=20,
-                ping_timeout=20,
-                close_timeout=10
-            )
-            logger.info("✓ Successfully connected to OpenAI Realtime API")
-            logger.debug(f"Connection details: ping_interval={20}s, ping_timeout={20}s")
-        except Exception as e:
-            logger.error(f"Failed to connect to OpenAI Realtime API: {e}")
-            raise
+        print(f"Connecting upstream to {base_url} ...")
+        self.upstream_ws = await websockets.connect(base_url, additional_headers=headers)
+        print("Upstream connected.")
 
     async def close(self):
         if self.upstream_ws:
-            logger.info("Closing upstream WebSocket connection...")
-            try:
-                await self.upstream_ws.close()
-                logger.info("✓ Connection closed cleanly")
-            except Exception as e:
-                logger.error(f"Error closing connection: {e}")
+            await self.upstream_ws.close()
 
 ################################################################################
 # Relay server: local <-> Realtime
 ################################################################################
 
-async def handle_client(client_ws, tool_registry=None):
+async def handle_client(client_ws):
     """
-    Handles a single local client with advanced error recovery and monitoring.
+    Handles a single local client that connects to the relay server.
     1. Expects first message to contain the desired session config (JSON).
     2. Creates ephemeral token + new RealtimeRelay instance
     3. Connects upstream
@@ -184,20 +145,8 @@ async def handle_client(client_ws, tool_registry=None):
     """
     relay = None
     try:
-        client_id = str(uuid.uuid4())[:8]
-        logger.info(f"New client connected [id={client_id}]", extra={'event': 'client.connect', 'client_id': client_id})
-
-        # Keep track of connection state
-        is_connected = True
-
-        # Step 1: Wait for session init from local with timeout
-        logger.info(f"[{client_id}] Waiting for session initialization...")
-        try:
-            init_msg_str = await asyncio.wait_for(client_ws.recv(), timeout=5.0)
-            logger.info(f"[{client_id}] Received session init message")
-        except asyncio.TimeoutError:
-            logger.warning(f"Session init timeout [id={client_id}]", extra={'event': 'error.timeout', 'client_id': client_id})
-            return
+        # Step 1: Wait for session init from local
+        init_msg_str = await client_ws.recv()
         init_msg = json.loads(init_msg_str)
         
         if init_msg.get("type") != "init_session":
@@ -234,42 +183,42 @@ async def handle_client(client_ws, tool_registry=None):
         relay = RealtimeRelay(ephemeral_token, session_config)
         await relay.connect_upstream()
 
-        # Load available tools and update session config
-        if tool_registry:
-            try:
-                tools = await tool_registry.list_tools()
-                if tools:
-                    session_config.setdefault("tools", []).extend(tools)
-            except Exception as e:
-                logger.warning(f"Failed to load tools: {e}")
+        # Load and format available tools
+        tools = await tool_registry.list_tools()
+        if tools:
+            session_config["tools"] = tools
+        else:
+            session_config["tools"] = []
         
         # Step 2: Start bi-directional relay
         async def relay_local_to_upstream():
             """
-            Advanced message relay with retry logic and monitoring
+            For every message from the local CLI, forward it upstream.
             """
-            metrics = {
-                'messages_sent': 0,
-                'retry_count': 0,
-                'errors': {},
-                'latency': []
-            }
-            while is_connected:
+            while True:
                 try:
-                    data_str = await asyncio.wait_for(client_ws.recv(), timeout=1.0)
+                    data_str = await client_ws.recv()
                     data = json.loads(data_str)
                     
                     # Ensure event_id exists
                     if "event_id" not in data:
                         data["event_id"] = f"evt_{uuid.uuid4().hex[:6]}"
                     
-                        
-                    # Add timeout to upstream send
-                    await asyncio.wait_for(relay.upstream_ws.send(json.dumps(data)), timeout=2.0)
-                except asyncio.TimeoutError:
-                    continue
+                    # Validate event type
+                    if "type" not in data:
+                        error_event = {
+                            "event_id": f"evt_{uuid.uuid4().hex[:6]}",
+                            "type": "error",
+                            "error": {
+                                "type": "invalid_request_error",
+                                "code": "invalid_event",
+                                "message": "The 'type' field is missing",
+                                "param": "type"
+                            }
+                        }
+                        await client_ws.send(json.dumps(error_event))
+                        continue
 
-                try:
                     # Handle function calls
                     if data.get("type") == "function.call":
                         try:
@@ -319,36 +268,22 @@ async def handle_client(client_ws, tool_registry=None):
                 async for data_str in relay.upstream_ws:
                     data = json.loads(data_str)
                     
-                    
                     # Track rate limits
                     if data.get("type") == "rate_limits.updated":
                         rate_limits = data.get("rate_limits", [])
                         
                     # Handle session creation
                     elif data.get("type") == "session.created":
-                        pass  # No special handling needed for session creation
+                        print(f"Session created with config: {data.get('session', {})}")
                         
                     # Handle errors
                     elif data.get("type") == "error":
-                        error_msg = data.get('error', {}).get('message', 'Unknown error')
-                        logger.error(f"OpenAI API error: {error_msg}")
-                        # Ensure proper error response format
-                        error_response = {
-                            "event_id": f"evt_{uuid.uuid4().hex[:6]}",
-                            "type": "error",
-                            "error": {
-                                "type": "openai_error",
-                                "code": "api_error",
-                                "message": error_msg
-                            }
-                        }
-                        await client_ws.send(json.dumps(error_response))
-                    else:
-                        await client_ws.send(data_str)
+                        print(f"Error from OpenAI: {data.get('error', {}).get('message', 'Unknown error')}")
+                        
+                    await client_ws.send(data_str)
                     
             except websockets.ConnectionClosed:
-                logger.debug("WebSocket connection closed")
-                return
+                pass
             except Exception as e:
                 error_event = {
                     "event_id": f"evt_{uuid.uuid4().hex[:6]}",
@@ -362,9 +297,8 @@ async def handle_client(client_ws, tool_registry=None):
                 }
                 try:
                     await client_ws.send(json.dumps(error_event))
-                except Exception as send_error:
-                    print(f"Failed to send error event: {send_error}")
-                return
+                except:
+                    pass
 
         done, pending = await asyncio.wait(
             [asyncio.create_task(relay_local_to_upstream()),
@@ -376,9 +310,9 @@ async def handle_client(client_ws, tool_registry=None):
             task.cancel()
 
     except (asyncio.CancelledError, websockets.ConnectionClosed):
-        logger.info(f"Client connection closed [id={client_id}]")
+        pass
     except Exception as e:
-        logger.error(f"Server error: {e}")
+        print(f"[Server Error] {e}")
         # Attempt to inform the client
         err_evt = {
             "type": "server_relay_error",
@@ -387,53 +321,38 @@ async def handle_client(client_ws, tool_registry=None):
         try:
             await client_ws.send(json.dumps(err_evt))
         except:
-            logger.error(f"Failed to send error to client: {e}")
-    finally:
-        is_connected = False
-        if relay:
-            await relay.close()
-        try:
-            await client_ws.close()
-        except:
             pass
+    finally:
+        await client_ws.close()
 
 async def main():
     # Initialize Tool Registry
-    tool_registry = await initialize_tool_registry()
+    await initialize_tool_registry()
     
-    logger.info(f"Starting relay server on ws://localhost:{LOCAL_SERVER_PORT}", 
-               extra={'event': 'server.start', 'port': LOCAL_SERVER_PORT})
-    
-    try:
-        server = await websockets.serve(
-            lambda ws: handle_client(ws, tool_registry), 
-            "127.0.0.1",  # Use IP address instead of hostname
-            LOCAL_SERVER_PORT, 
-            compression=None
-        )
-        
-        # Set up clean shutdown
-        loop = asyncio.get_running_loop()
-        stop = loop.create_future()
-        
-        def shutdown(sig, frame):
-            logger.info("Received shutdown signal", extra={'event': 'server.shutdown', 'signal': sig.name})
-            stop.set_result(None)
-            
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(sig, lambda s=sig: shutdown(s, None))
-            
-        try:
-            await stop  # Wait for shutdown signal
-        finally:
-            logger.info("Closing server connections...")
-            server.close()
-            await server.wait_closed()
-            
-    except Exception as e:
-        logger.error(f"Server error: {e}", extra={'event': 'error.server', 'error': str(e)})
-    finally:
-        logger.info("Server shutting down.", extra={'event': 'server.stop'})
+    print(r"""
+██████╗░██╗░██████╗████████╗██████╗░██╗██████╗░██╗░░░██╗████████╗███████╗██████╗░
+██╔══██╗██║██╔════╝╚══██╔══╝██╔══██╗██║██╔══██╗██║░░░██║╚══██╔══╝██╔════╝██╔══██╗
+██║░░██║██║╚█████╗░░░░██║░░░██████╔╝██║██████╦╝██║░░░██║░░░██║░░░█████╗░░██║░░██║
+██║░░██║██║░╚═══██╗░░░██║░░░██╔══██╗██║██╔══██╗██║░░░██║░░░██║░░░██╔══╝░░██║░░██║
+██████╔╝██║██████╔╝░░░██║░░░██║░░██║██║██████╦╝╚██████╔╝░░░██║░░░███████╗██████╔╝
+╚═════╝░╚═╝╚═════╝░░░░╚═╝░░░╚═╝░░╚═╝╚═╝╚═════╝░░╚═════╝░░░░╚═╝░░░╚══════╝╚═════╝░
+
+░██████╗██╗░░░██╗░██████╗████████╗███████╗███╗░░░███╗░██████╗
+██╔════╝╚██╗░██╔╝██╔════╝╚══██╔══╝██╔════╝████╗░████║██╔════╝
+╚█████╗░░╚████╔╝░╚█████╗░░░░██║░░░█████╗░░██╔████╔██║╚█████╗░
+░╚═══██╗░░╚██╔╝░░░╚═══██╗░░░██║░░░██╔══╝░░██║╚██╔╝██║░╚═══██╗
+██████╔╝░░░██║░░░██████╔╝░░░██║░░░███████╗██║░╚═╝░██║██████╔╝
+╚═════╝░░░░╚═╝░░░╚═════╝░░░░╚═╝░░░╚══════╝╚═╝░░░░░╚═╝╚═════╝░  
+          
+Relay Server implementation - OpenAI Realtime API
+          """)
+    print("\n")
+    print(f"Relay server started on ws://localhost:{LOCAL_SERVER_PORT}")
+    async with websockets.serve(handle_client, "localhost", LOCAL_SERVER_PORT, compression=None):
+        await asyncio.Future()  # run forever
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Relay server shutting down.")
