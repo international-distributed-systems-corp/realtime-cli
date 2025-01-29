@@ -1,10 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from modal import Image, Secret, App, asgi_app
+from modal import Image, Secret, App, asgi_app, Mount
+from pathlib import Path
 
 # Configuration
 TOOL_MGMT_APP_LABEL = "tool_management_api"
 NEO4J_SECRET_NAME = "distributed-systems"
+
+# Get current directory for mounting
+CURRENT_DIR = Path(__file__).parent
 
 # Modal configuration
 image = (
@@ -17,6 +21,16 @@ image = (
         "python-dotenv>=0.19.0",
         "httpx"
     ])
+    # Mount the templates directory
+    .add_local_dir(
+        str(CURRENT_DIR / "templates"),
+        remote_path="/root/templates"
+    )
+    # Mount the static directory
+    .add_local_dir(
+        str(CURRENT_DIR / "static"),
+        remote_path="/root/static"
+    )
 )
 
 # Create Modal app
