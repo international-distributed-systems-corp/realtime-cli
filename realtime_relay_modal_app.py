@@ -1,3 +1,4 @@
+import httpx
 from modal import Image, App, asgi_app
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends

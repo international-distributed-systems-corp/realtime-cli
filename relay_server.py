@@ -24,6 +24,14 @@ REQUIRED_ENV_VARS = {
     "TOOL_REGISTRY_URL": "URL of the Tool Registry service",
 }
 
+# Get OpenAI API key from environment
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY environment variable is required")
+
+# Initialize tool registry
+tool_registry = None
+
 # # Check for required environment variables
 # missing_vars = []
 # for var, description in REQUIRED_ENV_VARS.items():
@@ -184,11 +192,7 @@ async def handle_client(client_ws):
         await relay.connect_upstream()
 
         # Load and format available tools
-        tools = await tool_registry.list_tools()
-        if tools:
-            session_config["tools"] = tools
-        else:
-            session_config["tools"] = []
+        session_config["tools"] = []  # Initialize empty tools list
         
         # Step 2: Start bi-directional relay
         async def relay_local_to_upstream():
@@ -222,15 +226,11 @@ async def handle_client(client_ws):
                     # Handle function calls
                     if data.get("type") == "function.call":
                         try:
-                            result = await tool_registry.call_function(
-                                data["name"],
-                                data["parameters"]
-                            )
                             response = {
                                 "event_id": f"evt_{uuid.uuid4().hex[:6]}",
                                 "type": "function.response",
                                 "response_id": data.get("response_id"),
-                                "result": result
+                                "result": {"error": "Function calls not implemented"}
                             }
                             await client_ws.send(json.dumps(response))
                         except Exception as e:
