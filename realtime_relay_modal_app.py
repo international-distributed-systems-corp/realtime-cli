@@ -172,11 +172,28 @@ async def get_current_superuser(
         )
     return current_user
 
+from pathlib import Path
+
+# Get current directory for mounting
+CURRENT_DIR = Path(__file__).parent
+
 # Create Modal app and image
 app = App("realtime-relay")
 image = (
     Image.debian_slim()
     .pip_install(["fastapi", "uvicorn", "websockets>=12.0", "requests", "python-multipart", "python-jose[cryptography]", "passlib", "jinja2"])
+    # Mount the templates directory
+    .add_local_dir(
+        str(CURRENT_DIR / "templates"),
+        remote_path="/root/templates",
+        copy=True  # Copy files into image during build
+    )
+    # Mount the static directory
+    .add_local_dir(
+        str(CURRENT_DIR / "static"),
+        remote_path="/root/static",
+        copy=True  # Copy files into image during build
+    )
 )
 
 class RealtimeRelay:
