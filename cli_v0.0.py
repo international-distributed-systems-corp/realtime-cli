@@ -262,7 +262,25 @@ Remember:
         "silence_duration_ms": 500,
         "create_response": True
     },
-    "tools": gpt4_tools.to_params(),
+    "tools": [
+        {
+            "type": "function",
+            "name": "delegate_to_claude",
+            "description": "Delegate computer control tasks to Claude, who has direct access to the computer tools",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "instruction": {
+                        "type": "string",
+                        "description": "The instruction to send to Claude"
+                    }
+                },
+                "required": [
+                    "instruction"
+                ]
+            }
+        }
+    ],
     "tool_choice": "auto"
 }
 
