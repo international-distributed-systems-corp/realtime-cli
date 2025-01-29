@@ -196,7 +196,7 @@ class AudioManager:
         self.p.terminate()
 
 # Configuration
-RELAY_SERVER_URL = "wss://arthurcolle--realtime-relay-dev.modal.run/ws"  # Dev relay server
+RELAY_SERVER_URL = "wss://arthurcolle--realtime-relay.modal.run/ws"  # Production relay server
 AUDIO_CHUNK = 1024
 FORMAT = pyaudio.paFloat32
 CHANNELS = 1
@@ -388,12 +388,17 @@ async def main():
             await ws.send(json.dumps(init_msg))
             
             # Wait for session.created event
-            async for msg_str in ws:
-                event = json.loads(msg_str)
-                if event.get("type") == "session.created":
-                    break
-                elif event.get("type") == "error":
-                    raise Exception(f"Session initialization failed: {event.get('error', {}).get('message')}")
+            try:
+                async for msg_str in ws:
+                    event = json.loads(msg_str)
+                    if event.get("type") == "session.created":
+                        break
+                    elif event.get("type") == "error":
+                        error_msg = event.get('error', {}).get('message', 'Unknown error')
+                        raise Exception(f"Session initialization failed: {error_msg}")
+            except Exception as e:
+                print(f"\nError during session initialization: {str(e)}")
+                return
             
             # Run conversation and event handling loops
             done, pending = await asyncio.wait(
