@@ -412,26 +412,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     "error": {"message": "Invalid JSON message"}
                 }))
 
-        # Create relay connection
-        session_config = init_msg.get("session_config", {})
-        try:
-            token = create_ephemeral_token.local(session_config)
-            relay = RealtimeRelay(token, session_config)
-            await relay.connect_upstream()
-            
-            # Start bi-directional relay
-            await handle_client(websocket, relay)
-
-        except Exception as e:
-            logger.error(f"Failed to initialize relay: {e}")
-            await websocket.send_text(json.dumps({
-                "type": "error",
-                "error": {
-                    "code": "relay_init_failed",
-                    "message": str(e)
-                }
-            }))
-
     except WebSocketDisconnect:
         logger.info("Client disconnected normally")
     except Exception as e:
