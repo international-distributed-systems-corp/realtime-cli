@@ -18,13 +18,17 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 from queue import Queue, Empty
 
-from tools import ToolCollection, ComputerTool, BashTool, EditTool
+from tools import ToolCollection, ComputerTool, BashTool, EditTool, GPT4ProxyTool
 
-# Initialize tool collection
-tool_collection = ToolCollection(
+# Initialize tool collections
+claude_tools = ToolCollection(
     ComputerTool(),
     BashTool(),
     EditTool(),
+)
+
+gpt4_tools = ToolCollection(
+    GPT4ProxyTool(claude_tools)
 )
 
 from utils import (
@@ -258,7 +262,7 @@ Remember:
         "silence_duration_ms": 500,
         "create_response": True
     },
-    "tools": tool_collection.to_params(),
+    "tools": gpt4_tools.to_params(),
     "tool_choice": "auto"
 }
 
