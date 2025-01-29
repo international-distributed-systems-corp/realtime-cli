@@ -269,8 +269,8 @@ async def register(user: UserCreate):
     user = create_user(user)
     return {"message": "User registered successfully"}
 
-@web_app.post("/token")
-async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+@web_app.post("/token", response_model=Token)
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     """Login user and return access token"""
     user = authenticate_user(form_data.username, form_data.password)
     if not user:
