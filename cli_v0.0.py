@@ -398,17 +398,10 @@ async def main():
             loop = asyncio.get_event_loop()
             loop.add_signal_handler(signal.SIGINT, lambda: asyncio.create_task(handle_interrupt(ws)))
             
-            # Initialize session
-            init_msg = {
-                "type": "init_session",
-                "session_config": DEFAULT_SESSION_CONFIG
-            }
-            await ws.send(json.dumps(init_msg))
-            
             # Wait for connection.established and session.created events
             try:
                 # First wait for connection.established
-                msg_str = await asyncio.wait_for(ws.recv(), timeout=5.0)
+                msg_str = await asyncio.wait_for(ws.recv(), timeout=10.0)  # Increased timeout
                 event = json.loads(msg_str)
                 print(f"Received initialization response: {event}")
                 
@@ -418,18 +411,29 @@ async def main():
                 elif event.get("type") != "connection.established":
                     raise Exception(f"Expected connection.established, got {event.get('type')}")
                     
+                # Send init_session message after connection established
+                print("Connection established, initializing session...")
+                init_msg = {
+                    "type": "init_session",
+                    "session_config": DEFAULT_SESSION_CONFIG
+                }
+                await ws.send(json.dumps(init_msg))
+                
                 # Then wait for session.created
-                msg_str = await asyncio.wait_for(ws.recv(), timeout=5.0)
+                msg_str = await asyncio.wait_for(ws.recv(), timeout=10.0)  # Increased timeout
                 event = json.loads(msg_str)
+                print(f"Received session response: {event}")
                 
                 if event.get("type") == "error":
                     error_msg = event.get('error', {}).get('message', 'Unknown error')
                     raise Exception(f"Session initialization failed: {error_msg}")
                 elif event.get("type") != "session.created":
                     raise Exception(f"Expected session.created, got {event.get('type')}")
+                
+                print("Session successfully created!")
                     
             except asyncio.TimeoutError:
-                raise Exception("Session initialization timed out")
+                raise Exception("Session initialization timed out - the server took too long to respond")
             except Exception as e:
                 raise Exception(f"Session initialization failed: {str(e)}")
 
