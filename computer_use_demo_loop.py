@@ -81,6 +81,7 @@ async def sampling_loop(
         ComputerTool(),
         BashTool(),
         EditTool(),
+        AdvancedComputerTool(),
     )
     system = (
         f"{SYSTEM_PROMPT}{' ' + system_prompt_suffix if system_prompt_suffix else ''}"
