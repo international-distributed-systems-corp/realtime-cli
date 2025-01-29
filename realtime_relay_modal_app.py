@@ -168,7 +168,7 @@ async def get_current_superuser(
 app = App("realtime-relay")
 image = (
     Image.debian_slim()
-    .pip_install(["fastapi", "uvicorn", "websockets>=12.0", "requests", "python-multipart", "python-jose[cryptography]", "passlib"])
+    .pip_install(["fastapi", "uvicorn", "websockets>=12.0", "requests", "python-multipart", "python-jose[cryptography]", "passlib", "jinja2"])
 )
 
 class RealtimeRelay:

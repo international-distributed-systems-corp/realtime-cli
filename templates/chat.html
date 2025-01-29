@@ -1,18 +1,37 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Realtime AI Assistant</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+    <title>Realtime Chat</title>
+    <style>
+        #chat-container {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        #messages {
+            height: 400px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #eee;
+        }
+        #message-input {
+            width: 80%;
+            padding: 5px;
+            margin-right: 10px;
+        }
+    </style>
 </head>
 <body>
-    <div class="chat-container">
-        <div id="chat-messages" class="messages"></div>
-        <div class="input-area">
-            <input type="text" id="message-input" placeholder="Type your message...">
-            <button id="send-button">Send</button>
-            <button id="voice-button">🎤</button>
+    <div id="chat-container">
+        <div id="messages"></div>
+        <div>
+            <input type="text" id="message-input" placeholder="Type a message...">
+            <button onclick="sendMessage()">Send</button>
         </div>
     </div>
-    <script src="{{ url_for('static', path='/chat.js') }}"></script>
+    <script src="{{ url_for('static', filename='chat.js') }}"></script>
 </body>
 </html>
