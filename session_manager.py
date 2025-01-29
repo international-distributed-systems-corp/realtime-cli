@@ -110,6 +110,10 @@ class SessionManager:
             if v is not None and k != "_active_tools"
         }
         
+    def get_available_tools(self) -> List[Dict[str, Any]]:
+        """Get list of available tools"""
+        return list(self._active_tools.values())
+        
     def update_config(self, **kwargs) -> None:
         """Update session configuration parameters"""
         for key, value in kwargs.items():

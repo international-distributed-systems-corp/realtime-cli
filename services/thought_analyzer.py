@@ -43,7 +43,7 @@ class ThoughtAnalyzer:
         
         try:
             response = await openai.AsyncOpenAI().beta.chat.completions.parse(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -54,6 +54,7 @@ class ThoughtAnalyzer:
             
             # Parse the response into structured format
             content = response.choices[0].message.parsed
+            print(json.dumps(content.dict(), indent=2))
             return content
             
         except Exception as e:
