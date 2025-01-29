@@ -18,7 +18,7 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 from queue import Queue, Empty
 
-from computer_use_demo.tools import ToolCollection, ComputerTool, BashTool, EditTool
+from tools import ToolCollection, ComputerTool, BashTool, EditTool
 
 # Initialize tool collection
 tool_collection = ToolCollection(
