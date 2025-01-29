@@ -1,8 +1,21 @@
-
+import asyncio
+import json
+import logging
+import uuid
+import os
+import websockets
+import requests
+from datetime import datetime
 from modal import Image, App, asgi_app
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from typing import List, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
-from fastapi.security import HTTPAuthorizationCredentials
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Create FastAPI app with WebSocket support
 web_app = FastAPI(
@@ -17,53 +30,8 @@ web_app = FastAPI(
 app = App("realtime-relay")
 image = (
     Image.debian_slim()
-    .pip_install([
-        "fastapi", "uvicorn", "websockets==12.0", "requests", "python-multipart", "modal", "httpx",
-        "motor>=3.3.0", "bcrypt", "pydantic[email]", "pymongo>=4.5.0", "asyncio", "websockets", "requests"
-    ])
+    .pip_install(["fastapi", "uvicorn", "websockets>=12.0", "requests", "python-multipart"])
 )
-
-import asyncio
-import json
-
-import logging
-import uuid
-import os
-import time
-try:
-    import requests
-except ImportError:
-    os.system('pip install requests')
-    import requests
-
-try:
-    import websockets
-except ImportError:
-    os.system('pip install websockets')
-    import websockets
-
-try:
-    import httpx
-except ImportError:
-    os.system('pip install httpx')
-    import httpx
-
-from db import init_db, get_user_by_api_key, record_usage
-
-# Initialize database
-init_db()
-
-from datetime import datetime
-from typing import List, Optional
-from collections import defaultdict
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
 
 class RealtimeRelay:
     """
@@ -73,19 +41,6 @@ class RealtimeRelay:
         self.ephemeral_token = ephemeral_token
         self.session_config = session_config
         self.upstream_ws = None
-        self.state = RelayState()
-
-class RelayState:
-    def __init__(self):
-        self.events_sent = []
-        self.events_received = []
-        self.event_counts = defaultdict(int)
-        self.rate_limits = {}
-        self.token_usage = {
-            "total": 0,
-            "input": 0,
-            "output": 0
-        }
 
     async def connect_upstream(self):
         """Connect to the Realtime API over WebSocket using ephemeral token."""
@@ -107,76 +62,32 @@ class RelayState:
         if self.upstream_ws:
             await self.upstream_ws.close()
 
-from modal import Secret
-@app.function(secrets=[Secret.from_name("distributed-systems")])
-async def create_ephemeral_token(session_config: dict) -> str:
+def create_ephemeral_token(session_config: dict) -> str:
     """Create ephemeral token for Realtime API access."""
-    try:
-        payload = {
-            k: session_config[k]
-            for k in [
-                "model", "modalities", "instructions", "voice",
-                "input_audio_format", "output_audio_format",
-                "input_audio_transcription", "turn_detection",
-                "tools", "tool_choice", "temperature",
-                "max_response_output_tokens"
-            ]
-            if k in session_config
-        }
-        openai_api_key = os.environ.get("OPENAI_API_KEY")
-        url = "https://api.openai.com/v1/realtime/tokens"
-        headers = {
-            "Authorization": f"Bearer {openai_api_key}",
-            "Content-Type": "application/json",
-            "OpenAI-Beta": "realtime=v1"
-        }
+    payload = {
+        k: session_config[k]
+        for k in [
+            "model", "modalities", "instructions", "voice",
+            "input_audio_format", "output_audio_format",
+            "input_audio_transcription", "turn_detection",
+            "tools", "tool_choice", "temperature",
+            "max_response_output_tokens"
+        ]
+        if k in session_config
+    }
+    openai_api_key = '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'
+    url = "https://api.openai.com/v1/realtime/sessions"
+    headers = {
+        "Authorization": f"Bearer {openai_api_key}",
+        "Content-Type": "application/json",
+        "OpenAI-Beta": "realtime=v1"
+    }
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, headers=headers, json=payload)
-        if resp.status_code != 200:
-            error_data = resp.json()
-            error_message = error_data.get('error', {}).get('message', resp.text)
-            raise RuntimeError(f"Failed to create ephemeral token: {error_message}")
-        data = resp.json()
-        return data.get("client_secret", {}).get("value")
-    
-        openai_api_key = os.environ.get("OPENAI_API_KEY")
-        if not openai_api_key:
-            raise RuntimeError("OPENAI_API_KEY environment variable is not set")
-            
-        url = "https://api.openai.com/v1/realtime/tokens"
-        headers = {
-            "Authorization": f"Bearer {openai_api_key}",
-            "Content-Type": "application/json",
-            "OpenAI-Beta": "realtime=v1"
-        }
-        
-        payload = {
-            k: session_config[k]
-            for k in [
-                "model", "modalities", "instructions", "voice",
-                "input_audio_format", "output_audio_format",
-                "input_audio_transcription", "turn_detection",
-                "tools", "tool_choice", "temperature",
-                "max_response_output_tokens"
-            ]
-            if k in session_config
-        }
-
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, headers=headers, json=payload)
-            
-        if resp.status_code != 200:
-            error_data = resp.json()
-            error_message = error_data.get('error', {}).get('message', resp.text)
-            raise RuntimeError(f"Failed to create ephemeral token: {error_message}")
-            
-        data = resp.json()
-        return data.get("client_secret", {}).get("value")
-        
-    except Exception as e:
-        logger.error(f"Token creation failed: {str(e)}")
-        raise RuntimeError(f"Failed to create ephemeral token: {str(e)}")
+    resp = requests.post(url, headers=headers, json=payload)
+    if resp.status_code != 200:
+        raise RuntimeError(f"Failed ephemeral token: {resp.text}")
+    data = resp.json()
+    return data["client_secret"]["value"]
 
 class ConnectionManager:
     def __init__(self):
@@ -196,66 +107,18 @@ async def handle_client(websocket: WebSocket, relay: Optional[RealtimeRelay] = N
     try:
         async def relay_local_to_upstream():
             while True:
-                try:
-                    data_str = await websocket.receive_text()
-                    data = json.loads(data_str)
-                    
-                    # Add event ID if missing
-                    if "event_id" not in data:
-                        data["event_id"] = f"evt_{uuid.uuid4().hex[:6]}"
-                    
-                    # Track event
-                    relay.state.events_sent.append({
-                        "timestamp": time.time(),
-                        "event": data
-                    })
-                    relay.state.event_counts[data.get("type", "unknown")] += 1
-                    
-                    # Send to upstream
-                    await relay.upstream_ws.send(json.dumps(data))
-                    
-                except json.JSONDecodeError:
-                    logger.error("Invalid JSON received from client")
-                except Exception as e:
-                    logger.error(f"Error in local->upstream relay: {e}")
+                data_str = await websocket.receive_text()
+                data = json.loads(data_str)
+                if "event_id" not in data:
+                    data["event_id"] = f"evt_{uuid.uuid4().hex[:6]}"
+                await relay.upstream_ws.send(json.dumps(data))
 
         async def relay_upstream_to_local():
             try:
                 async for data_str in relay.upstream_ws:
-                    try:
-                        # Parse and track event
-                        data = json.loads(data_str)
-                        relay.state.events_received.append({
-                            "timestamp": time.time(),
-                            "event": data
-                        })
-                        relay.state.event_counts[data.get("type", "unknown")] += 1
-                        
-                        # Track rate limits
-                        if data.get("type") == "rate_limits.updated":
-                            relay.state.rate_limits = {
-                                limit["name"]: limit 
-                                for limit in data.get("rate_limits", [])
-                            }
-                        
-                        # Track token usage
-                        if data.get("type") == "response.done":
-                            usage = data.get("response", {}).get("usage", {})
-                            if usage:
-                                relay.state.token_usage["total"] += usage.get("total_tokens", 0)
-                                relay.state.token_usage["input"] += usage.get("input_tokens", 0)
-                                relay.state.token_usage["output"] += usage.get("output_tokens", 0)
-                        
-                        # Send to client
-                        await websocket.send_text(data_str)
-                        
-                    except json.JSONDecodeError:
-                        logger.error("Invalid JSON received from upstream")
-                    except Exception as e:
-                        logger.error(f"Error processing upstream event: {e}")
-                        
+                    await websocket.send_text(data_str)
             except websockets.ConnectionClosed:
-                logger.info("Upstream connection closed")
+                pass
 
         done, pending = await asyncio.wait(
             [asyncio.create_task(relay_local_to_upstream()),
@@ -306,7 +169,7 @@ async def websocket_endpoint(websocket: WebSocket):
         # Create relay connection
         session_config = init_msg.get("session_config", {})
         try:
-            token = await create_ephemeral_token(session_config)
+            token = create_ephemeral_token(session_config)
             relay = RealtimeRelay(token, session_config)
             await relay.connect_upstream()
             
@@ -332,7 +195,15 @@ async def websocket_endpoint(websocket: WebSocket):
             await relay.close()
         logger.info("Cleaning up WebSocket connection")
 
-@app.asgi_app()
+# add endpoint 
+@app.function(
+    image=image,
+    keep_warm=1,
+    allow_concurrent_inputs=True,
+    timeout=600,
+    container_idle_timeout=300,
+)
+@asgi_app(label="realtime-relay")
 def fastapi_app():
     """ASGI app for handling WebSocket connections"""
     return web_app
