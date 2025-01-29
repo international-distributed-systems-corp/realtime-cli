@@ -12,6 +12,7 @@ import logging
 import threading
 import base64
 import signal
+import argparse
 from typing import Optional, Dict, Any
 from pathlib import Path
 from queue import Queue, Empty
@@ -195,8 +196,11 @@ class AudioManager:
         self.stop_playback()
         self.p.terminate()
 
+# Environment URLs
+PROD_URL = "wss://arthurcolle--realtime-relay.modal.run/ws"
+DEV_URL = "wss://arthurcolle--realtime-relay-dev.modal.run/ws"
+
 # Configuration
-RELAY_SERVER_URL = "wss://arthurcolle--realtime-relay.modal.run/ws"  # Production relay server
 AUDIO_CHUNK = 1024
 FORMAT = pyaudio.paFloat32
 CHANNELS = 1
@@ -369,11 +373,20 @@ async def handle_server_events(ws):
 
 async def main():
     """Main entry point"""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='OpenAI Realtime API CLI')
+    parser.add_argument('--env', choices=['prod', 'dev'], default='prod',
+                       help='Environment to connect to (prod or dev)')
+    args = parser.parse_args()
+    
+    # Select URL based on environment
+    relay_url = PROD_URL if args.env == 'prod' else DEV_URL
+    
     try:
-        print(f"Connecting to relay at {RELAY_SERVER_URL} ...")
+        print(f"Connecting to relay at {relay_url} ...")
         
         async with websockets.connect(
-            RELAY_SERVER_URL,
+            relay_url,
             additional_headers={"Content-Type": "application/json"}
         ) as ws:
             # Set up signal handler
