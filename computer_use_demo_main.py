@@ -33,6 +33,26 @@ async def main():
         )
     provider = APIProvider.ANTHROPIC
 
+    # Set up Claude's system prompt for working with GPT-4
+    system_prompt_suffix = """
+You are working as part of a dual-AI system:
+1. GPT-4 handles voice interaction with the user and delegates computer control tasks to you
+2. Your role is to execute the computer control tasks that GPT-4 requests
+3. Provide clear feedback about what you're doing so GPT-4 can keep the user informed
+
+Example interaction:
+GPT-4: "Claude, please search the filesystem for documents containing 'neural network' and provide a summary of what you find."
+You: "Searching filesystem... Found 3 documents:
+1. neural_nets_intro.pdf
+2. deep_learning_notes.txt
+3. nn_architecture.md
+The documents appear to cover neural network basics, deep learning concepts, and architecture patterns."
+
+Remember:
+- Execute tasks as requested by GPT-4
+- Provide clear, concise status updates
+- Let GPT-4 handle all direct user interaction"""
+
     # Get instruction
     instruction = " ".join(args.instruction) if args.instruction else "Save an image of a cat to the desktop."
 
