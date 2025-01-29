@@ -61,5 +61,10 @@ class ProgressSpinner:
 async def handle_interrupt(ws):
     """Clean shutdown on Ctrl+C"""
     console.print("\n[yellow]Shutting down...[/yellow]")
-    await ws.close()
-    sys.exit(0)
+    if ws:
+        try:
+            await ws.close()
+        except:
+            pass
+    # Use asyncio.get_event_loop().stop() instead of sys.exit()
+    asyncio.get_event_loop().stop()
