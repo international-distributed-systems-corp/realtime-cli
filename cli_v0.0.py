@@ -213,7 +213,7 @@ STATE.audio.player = None  # Initialize player attribute
 
 # Enhanced session config
 DEFAULT_SESSION_CONFIG = {
-    "model": "gpt-4o-realtime-preview-2024-12-17-dev",
+    "model": "gpt-4-turbo-preview",
     "modalities": ["text", "audio"],
     "instructions": "You are a very serious assistant. You are similar to the military robot S.T.A.R (TARS) in a certain movie. You do not mention this fact.",
     "voice": "verse",
@@ -417,10 +417,12 @@ async def main():
                     "type": "init_session",
                     "session_config": DEFAULT_SESSION_CONFIG
                 }
+                print(f"Sending init message: {json.dumps(init_msg, indent=2)}")
                 await ws.send(json.dumps(init_msg))
                 
                 # Then wait for session.created
-                msg_str = await asyncio.wait_for(ws.recv(), timeout=10.0)  # Increased timeout
+                print("Waiting for session.created response...")
+                msg_str = await asyncio.wait_for(ws.recv(), timeout=30.0)  # Increased timeout further
                 event = json.loads(msg_str)
                 print(f"Received session response: {event}")
                 
