@@ -10,9 +10,10 @@ logger = logging.getLogger(__name__)
 class ThoughtAnalyzer:
     """Analyzes user queries using chain of thought reasoning"""
     
-    def __init__(self, api_key: str):
-        self.api_key = api_key
-        openai.api_key = api_key
+    def __init__(self):
+        import os
+        self.api_key = os.getenv("OPENAI_API_KEY")
+        openai.api_key = self.api_key
         
     async def analyze_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> ChainOfThought:
         """Analyze a user query using chain of thought reasoning"""
@@ -41,83 +42,23 @@ class ThoughtAnalyzer:
             user_prompt = f"Context:\n{json.dumps(context)}\n\nQuery:\n{query}"
         
         try:
-            response = await openai.ChatCompletion.acreate(
-                model="gpt-4",
+            response = await openai.AsyncOpenAI().beta.chat.completions.parse(
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.7
+                temperature=0.7,
+                response_format=ChainOfThought
             )
             
             # Parse the response into structured format
-            content = response.choices[0].message.content
-            
-            # Extract structured data (implement parsing logic)
-            thought_structure = self._parse_response(content)
-            
-            # Add model suggestions based on analysis
-            thought_structure.suggested_models = self._suggest_models(thought_structure)
-            
-            return thought_structure
+            content = response.choices[0].message.parsed
+            return content
             
         except Exception as e:
             logger.error(f"Error analyzing query: {str(e)}")
             raise
-            
-    def _parse_response(self, content: str) -> ChainOfThought:
-        """Parse OpenAI response into ChainOfThought structure"""
-        # Implement parsing logic here
-        # This is a simplified example
-        lines = content.split("\n")
-        steps = []
-        metadata = []
-        initial_thought = ""
-        final_conclusion = ""
-        
-        current_step = None
-        
-        for line in lines:
-            if line.startswith("Initial Thought:"):
-                initial_thought = line.split(":", 1)[1].strip()
-            elif line.startswith("Step "):
-                if current_step:
-                    steps.append(current_step)
-                current_step = ThoughtStep(
-                    step_number=len(steps) + 1,
-                    reasoning="",
-                    conclusion="",
-                    confidence=0.0,
-                    category=ThoughtCategory.GENERAL
-                )
-            elif line.startswith("Final Conclusion:"):
-                final_conclusion = line.split(":", 1)[1].strip()
-                if current_step:
-                    steps.append(current_step)
-            elif current_step:
-                if line.startswith("Reasoning:"):
-                    current_step.reasoning = line.split(":", 1)[1].strip()
-                elif line.startswith("Conclusion:"):
-                    current_step.conclusion = line.split(":", 1)[1].strip()
-                elif line.startswith("Confidence:"):
-                    current_step.confidence = float(line.split(":", 1)[1].strip())
-                elif line.startswith("Category:"):
-                    category = line.split(":", 1)[1].strip()
-                    current_step.category = ThoughtCategory(category.lower())
-                elif line.startswith("Tools:"):
-                    tools = line.split(":", 1)[1].strip()
-                    if tools.lower() != "none":
-                        current_step.requires_tools = True
-                        current_step.suggested_tools = [t.strip() for t in tools.split(",")]
-        
-        return ChainOfThought(
-            initial_thought=initial_thought,
-            steps=steps,
-            final_conclusion=final_conclusion,
-            metadata=metadata,
-            estimated_complexity=self._calculate_complexity(steps),
-            requires_realtime=self._requires_realtime(steps)
-        )
         
     def _calculate_complexity(self, steps: List[ThoughtStep]) -> int:
         """Calculate overall complexity score"""

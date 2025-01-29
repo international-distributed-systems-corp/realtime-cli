@@ -20,7 +20,7 @@ class ThoughtStep(BaseModel):
     conclusion: str
     confidence: float
     category: ThoughtCategory
-    requires_tools: bool = False
+    requires_tools: bool
     suggested_tools: List[str] = Field(default_factory=list)
 
 class ChainOfThought(BaseModel):
@@ -28,6 +28,6 @@ class ChainOfThought(BaseModel):
     steps: List[ThoughtStep]
     final_conclusion: str
     metadata: List[Metadata] = Field(default_factory=list)
-    estimated_complexity: int = Field(ge=1, le=10)
-    requires_realtime: bool = True
+    estimated_complexity: int
+    requires_realtime: bool
     suggested_models: List[str] = Field(default_factory=list)
