@@ -55,6 +55,7 @@ init_db()
 
 from datetime import datetime
 from typing import List, Optional
+from collections import defaultdict
 
 # Configure logging
 logging.basicConfig(
@@ -72,6 +73,19 @@ class RealtimeRelay:
         self.ephemeral_token = ephemeral_token
         self.session_config = session_config
         self.upstream_ws = None
+        self.state = RelayState()
+
+class RelayState:
+    def __init__(self):
+        self.events_sent = []
+        self.events_received = []
+        self.event_counts = defaultdict(int)
+        self.rate_limits = {}
+        self.token_usage = {
+            "total": 0,
+            "input": 0,
+            "output": 0
+        }
 
     async def connect_upstream(self):
         """Connect to the Realtime API over WebSocket using ephemeral token."""
@@ -109,7 +123,7 @@ async def create_ephemeral_token(session_config: dict) -> str:
         if k in session_config
     }
     openai_api_key = os.environ.get("OPENAI_API_KEY")
-    url = "https://api.openai.com/v1/realtime/sessions"
+    url = "https://api.openai.com/v1/realtime/tokens"
     headers = {
         "Authorization": f"Bearer {openai_api_key}",
         "Content-Type": "application/json",
@@ -251,7 +265,7 @@ async def websocket_endpoint(websocket: WebSocket):
         # Create relay connection
         session_config = init_msg.get("session_config", {})
         try:
-            token = await create_ephemeral_token.remote(session_config)
+            token = await create_ephemeral_token(session_config)
             relay = RealtimeRelay(token, session_config)
             await relay.connect_upstream()
             
