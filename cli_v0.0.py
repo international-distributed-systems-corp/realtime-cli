@@ -391,9 +391,7 @@ async def main():
         ) as ws:
             # Set up signal handler
             loop = asyncio.get_event_loop()
-            def interrupt_handler():
-                loop.create_task(handle_interrupt(ws))
-            loop.add_signal_handler(signal.SIGINT, interrupt_handler)
+            loop.add_signal_handler(signal.SIGINT, lambda: asyncio.create_task(handle_interrupt(ws)))
             
             # Initialize session
             init_msg = {
@@ -403,20 +401,13 @@ async def main():
             await ws.send(json.dumps(init_msg))
             
             # Wait for session.created event
-            try:
-                async for msg_str in ws:
-                    event = json.loads(msg_str)
-                    if event.get("type") == "session.created":
-                        break
-                    elif event.get("type") == "error":
-                        error_data = event.get('error', {})
-                        error_msg = error_data.get('message', 'Unknown error')
-                        error_type = error_data.get('type', 'unknown')
-                        print(f"\nError during session initialization: {error_type} - {error_msg}")
-                        return
-            except Exception as e:
-                print(f"\nError during session initialization: {str(e)}")
-                return
+            msg_str = await ws.recv()
+            event = json.loads(msg_str)
+            if event.get("type") == "error":
+                error_msg = event.get('error', {}).get('message', 'Unknown error')
+                raise Exception(f"Session initialization failed: {error_msg}")
+            elif event.get("type") != "session.created":
+                raise Exception("Unexpected response during session initialization")
             
             # Run conversation and event handling loops
             done, pending = await asyncio.wait(
