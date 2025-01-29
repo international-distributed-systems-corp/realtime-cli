@@ -314,6 +314,9 @@ async def handle_server_events(ws):
                 event = json.loads(msg_str)
                 event_type = event.get("type")
                 
+                # Debug logging
+                print(f"Received event: {event_type}")
+                
                 # Handle different event types
                 if event_type == "error":
                     print(f"\nError: {event['error'].get('message')}")
@@ -400,14 +403,20 @@ async def main():
             }
             await ws.send(json.dumps(init_msg))
             
-            # Wait for session.created event
-            msg_str = await ws.recv()
-            event = json.loads(msg_str)
-            if event.get("type") == "error":
-                error_msg = event.get('error', {}).get('message', 'Unknown error')
-                raise Exception(f"Session initialization failed: {error_msg}")
-            elif event.get("type") != "session.created":
-                raise Exception("Unexpected response during session initialization")
+            # Wait for session.created event with timeout
+            try:
+                msg_str = await asyncio.wait_for(ws.recv(), timeout=5.0)
+                event = json.loads(msg_str)
+                
+                # Log the received event for debugging
+                print(f"Received initialization response: {event}")
+                
+                if event.get("type") == "error":
+                    error_msg = event.get('error', {}).get('message', 'Unknown error')
+                    raise Exception(f"Session initialization failed: {error_msg}")
+                elif event.get("type") != "session.created":
+                    # Don't fail immediately, let the event handler process it
+                    print(f"Note: First event was {event.get('type')} instead of session.created")
             
             # Run conversation and event handling loops
             done, pending = await asyncio.wait(
