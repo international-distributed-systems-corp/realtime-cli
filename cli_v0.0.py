@@ -405,20 +405,29 @@ async def main():
             }
             await ws.send(json.dumps(init_msg))
             
-            # Wait for session.created event with timeout
+            # Wait for connection.established and session.created events
             try:
+                # First wait for connection.established
                 msg_str = await asyncio.wait_for(ws.recv(), timeout=5.0)
                 event = json.loads(msg_str)
-                
-                # Log the received event for debugging
                 print(f"Received initialization response: {event}")
                 
                 if event.get("type") == "error":
                     error_msg = event.get('error', {}).get('message', 'Unknown error')
                     raise Exception(f"Session initialization failed: {error_msg}")
+                elif event.get("type") != "connection.established":
+                    raise Exception(f"Expected connection.established, got {event.get('type')}")
+                    
+                # Then wait for session.created
+                msg_str = await asyncio.wait_for(ws.recv(), timeout=5.0)
+                event = json.loads(msg_str)
+                
+                if event.get("type") == "error":
+                    error_msg = event.get('error', {}).get('message', 'Unknown error')
+                    raise Exception(f"Session initialization failed: {error_msg}")
                 elif event.get("type") != "session.created":
-                    # Don't fail immediately, let the event handler process it
-                    print(f"Note: First event was {event.get('type')} instead of session.created")
+                    raise Exception(f"Expected session.created, got {event.get('type')}")
+                    
             except asyncio.TimeoutError:
                 raise Exception("Session initialization timed out")
             except Exception as e:
