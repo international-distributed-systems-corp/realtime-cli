@@ -78,7 +78,7 @@ static_dir = current_dir / "static"
 templates = Jinja2Templates(directory=str(templates_dir))
 
 # Mount static files with absolute path and name
-web_app.mount("/static", StaticFiles(directory="/root/static"), name="static")
+web_app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 @web_app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -195,15 +195,13 @@ image = (
     .pip_install(["fastapi", "uvicorn", "python-dotenv", "websockets>=12.0", "requests", "python-multipart", "python-jose[cryptography]", "passlib", "jinja2"])
     # Mount the templates directory
     .add_local_dir(
-        str(CURRENT_DIR / "templates"),
-        remote_path="/root/templates",
-        copy=True  # Copy files into image during build
+        "templates",
+        remote_path="/root/templates"
     )
-    # Mount the static directory
+    # Mount the static directory  
     .add_local_dir(
-        str(CURRENT_DIR / "static"),
-        remote_path="/root/static",
-        copy=True  # Copy files into image during build
+        "static", 
+        remote_path="/root/static"
     )
 )
 
@@ -446,11 +444,7 @@ def init_db():
     allow_concurrent_inputs=True,
     timeout=600,
     container_idle_timeout=300,
-    secrets=[Secret.from_name("distributed-systems")],
-    mounts=[
-        Mount.from_local_dir("static", remote_path="/root/static"),
-        Mount.from_local_dir("templates", remote_path="/root/templates")
-    ]
+    secrets=[Secret.from_name("distributed-systems")]
 )
 @asgi_app(label="realtime-relay")
 def fastapi_app():
