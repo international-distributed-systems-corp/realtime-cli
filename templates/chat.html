@@ -1,37 +1,153 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Realtime Chat</title>
-    <style>
-        #chat-container {
-            max-width: 600px;
-            margin: 20px auto;
-            padding: 20px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
-        #messages {
-            height: 400px;
-            overflow-y: auto;
-            margin-bottom: 20px;
-            padding: 10px;
-            border: 1px solid #eee;
-        }
-        #message-input {
-            width: 80%;
-            padding: 5px;
-            margin-right: 10px;
-        }
-    </style>
+    <title>AI Chat</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
-<body>
-    <div id="chat-container">
-        <div id="messages"></div>
-        <div>
-            <input type="text" id="message-input" placeholder="Type a message...">
-            <button onclick="sendMessage()">Send</button>
+<body class="bg-gray-100">
+    <div class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-white shadow">
+            <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-gray-900">AI Chat</h1>
+                <div class="flex items-center space-x-4">
+                    <span id="user-email" class="text-gray-600"></span>
+                    <button id="logout" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main chat area -->
+        <div class="flex-1 max-w-7xl mx-auto w-full p-4 flex flex-col">
+            <!-- Messages container -->
+            <div id="messages" class="flex-1 bg-white rounded-lg shadow p-4 mb-4 overflow-y-auto min-h-[500px] space-y-4">
+            </div>
+
+            <!-- Input area -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <form id="message-form" class="flex space-x-4">
+                    <input 
+                        type="text" 
+                        id="message-input"
+                        class="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Type your message..."
+                    >
+                    <button 
+                        type="submit"
+                        class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                        Send
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
-    <script src="/static/chat.js"></script>
+
+    <script>
+        let ws = null;
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Fetch user info
+        fetch('/users/me', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        })
+        .then(response => response.json())
+        .then(user => {
+            document.getElementById('user-email').textContent = user.email;
+        })
+        .catch(() => {
+            window.location.href = '/login';
+        });
+
+        // Handle logout
+        document.getElementById('logout').addEventListener('click', () => {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        });
+
+        function connect() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+            
+            ws.onopen = () => {
+                console.log('Connected to WebSocket');
+                appendMessage('System', 'Connected to chat server');
+                
+                // Send init message
+                ws.send(JSON.stringify({
+                    type: 'init_session',
+                    session_config: {
+                        model: 'gpt-4-turbo-preview',
+                        instructions: 'You are a helpful AI assistant.',
+                        temperature: 0.7
+                    }
+                }));
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'message') {
+                    appendMessage(data.sender, data.text);
+                } else if (data.type === 'error') {
+                    appendMessage('Error', data.error.message);
+                }
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket connection closed');
+                appendMessage('System', 'Disconnected from chat server');
+                setTimeout(connect, 1000); // Reconnect after 1 second
+            };
+        }
+
+        function appendMessage(sender, text) {
+            const messages = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'p-4 rounded-lg ' + 
+                (sender === 'User' ? 'bg-blue-100 ml-12' : 'bg-gray-100 mr-12');
+            
+            const senderSpan = document.createElement('span');
+            senderSpan.className = 'font-bold text-gray-700';
+            senderSpan.textContent = sender;
+            
+            const textDiv = document.createElement('div');
+            textDiv.className = 'mt-1 text-gray-800';
+            textDiv.textContent = text;
+            
+            messageDiv.appendChild(senderSpan);
+            messageDiv.appendChild(textDiv);
+            messages.appendChild(messageDiv);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        document.getElementById('message-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            
+            if (message && ws && ws.readyState === WebSocket.OPEN) {
+                appendMessage('User', message);
+                ws.send(JSON.stringify({
+                    type: 'conversation.item.create',
+                    content: [{
+                        type: 'text',
+                        text: message
+                    }]
+                }));
+                input.value = '';
+            }
+        });
+
+        // Connect when page loads
+        connect();
+    </script>
 </body>
 </html>
