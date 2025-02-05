@@ -18,13 +18,15 @@ function connect() {
 
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        if (data.type === 'message') {
-            appendMessage(data.sender, data.text);
+        if (data.type === 'response.text.delta') {
+            appendMessage('Assistant', data.delta);
         } else if (data.type === 'error') {
             console.error('Server error:', data.error);
             appendMessage('System', 'Error: ' + data.error.message);
         } else if (data.type === 'connection.established') {
             console.log('Connection established:', data);
+        } else if (data.type === 'session.created') {
+            console.log('Session created:', data);
         }
     };
 
@@ -57,8 +59,11 @@ function sendMessage() {
     
     if (message && ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
-            type: 'message',
-            text: message
+            type: 'conversation.item.create',
+            content: [{
+                type: 'text',
+                text: message
+            }]
         }));
         appendMessage('You', message);
         input.value = '';
