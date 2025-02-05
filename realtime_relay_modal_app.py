@@ -44,7 +44,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # Database configuration
-DATABASE_URL = "realtime.db"
+DATABASE_URL = "/root/data/realtime.db"
 
 @contextmanager
 def get_db():
@@ -203,6 +203,15 @@ image = (
     .add_local_dir(
         "static", 
         remote_path="/root/static"
+    )
+    # Create and mount data directory for SQLite
+    .run_commands(
+        "mkdir -p /root/data"
+    )
+    .add_local_dir(
+        "data",
+        remote_path="/root/data",
+        create_local_dir=True
     )
 )
 
@@ -451,6 +460,10 @@ def init_db():
 @asgi_app(label="realtime-relay")
 def fastapi_app():
     """ASGI app for handling WebSocket connections"""
+    # Ensure database directory exists
+    os.makedirs(os.path.dirname(DATABASE_URL), exist_ok=True)
+    # Initialize database tables
+    init_db()
     return web_app
 
 if __name__ == "__main__":
