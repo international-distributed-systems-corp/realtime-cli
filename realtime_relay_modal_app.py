@@ -8,7 +8,12 @@ import os
 import sqlite3
 import websockets
 import requests
+import aiometer
 from datetime import datetime, timedelta
+from prometheus_client import Counter, Histogram, start_http_server
+from asyncio import Queue
+from dataclasses import dataclass
+from typing import Dict, Set
 from typing import List, Optional, Union, Dict, Any, Annotated
 from contextlib import contextmanager
 from jose import JWTError, jwt
@@ -31,9 +36,77 @@ from typing import List, Optional
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("/root/data/realtime.log")
+    ]
 )
 logger = logging.getLogger(__name__)
+
+# Metrics
+WEBSOCKET_CONNECTIONS = Counter('websocket_connections_total', 'Total WebSocket connections')
+WEBSOCKET_MESSAGES = Counter('websocket_messages_total', 'Total WebSocket messages')
+MESSAGE_PROCESSING_TIME = Histogram('message_processing_seconds', 'Time spent processing messages')
+
+# Rate limiting
+RATE_LIMIT = 100  # requests per minute
+RATE_WINDOW = 60  # seconds
+
+@dataclass
+class RateLimit:
+    """Rate limiting data"""
+    count: int = 0
+    window_start: float = 0
+
+class RateLimiter:
+    """Rate limiting implementation"""
+    def __init__(self):
+        self.clients: Dict[str, RateLimit] = {}
+    
+    async def check_rate_limit(self, client_id: str) -> bool:
+        now = datetime.now().timestamp()
+        if client_id not in self.clients:
+            self.clients[client_id] = RateLimit(count=1, window_start=now)
+            return True
+            
+        rate_data = self.clients[client_id]
+        if now - rate_data.window_start > RATE_WINDOW:
+            rate_data.count = 1
+            rate_data.window_start = now
+            return True
+            
+        if rate_data.count >= RATE_LIMIT:
+            return False
+            
+        rate_data.count += 1
+        return True
+
+rate_limiter = RateLimiter()
+
+# Connection pool
+class ConnectionPool:
+    """Manages a pool of upstream connections"""
+    def __init__(self, max_size: int = 10):
+        self.max_size = max_size
+        self.pool: Set[RealtimeRelay] = set()
+        self.queue = Queue()
+        
+    async def acquire(self) -> 'RealtimeRelay':
+        if len(self.pool) < self.max_size:
+            relay = await self._create_relay()
+            self.pool.add(relay)
+            return relay
+        return await self.queue.get()
+        
+    async def release(self, relay: 'RealtimeRelay'):
+        await self.queue.put(relay)
+        
+    async def _create_relay(self) -> 'RealtimeRelay':
+        # Implementation depends on your RealtimeRelay class
+        pass
+
+connection_pool = ConnectionPool()
 
 # Security configuration
 SECRET_KEY = os.getenv("APP_SECRET_KEY", "your-secret-key-here")
@@ -218,11 +291,19 @@ image = (
 class RealtimeRelay:
     """
     Manages a single upstream connection to the OpenAI Realtime API.
+    Includes health checking and automatic reconnection.
     """
     def __init__(self, ephemeral_token: str, session_config: dict):
         self.ephemeral_token = ephemeral_token
         self.session_config = session_config
         self.upstream_ws = None
+        self.healthy = True
+        self.last_heartbeat = datetime.now()
+        self.reconnect_attempts = 0
+        self.max_reconnect_attempts = 3
+        self.message_queue = Queue()
+        asyncio.create_task(self._health_check())
+        asyncio.create_task(self._process_queue())
 
     async def connect_upstream(self):
         """Connect to the Realtime API over WebSocket using ephemeral token."""
@@ -236,9 +317,59 @@ class RealtimeRelay:
             "OpenAI-Beta": "realtime=v1"
         }
 
-        logger.info(f"Connecting upstream to {base_url} ...")
-        self.upstream_ws = await websockets.connect(base_url, additional_headers=headers)
-        logger.info("Upstream connected.")
+        try:
+            logger.info(f"Connecting upstream to {base_url} ...")
+            self.upstream_ws = await websockets.connect(
+                base_url, 
+                additional_headers=headers,
+                ping_interval=20,
+                ping_timeout=10
+            )
+            logger.info("Upstream connected.")
+            self.healthy = True
+            self.reconnect_attempts = 0
+        except Exception as e:
+            logger.error(f"Connection error: {e}")
+            self.healthy = False
+            await self._handle_reconnect()
+            
+    async def _health_check(self):
+        """Periodic health check"""
+        while True:
+            await asyncio.sleep(30)
+            if self.upstream_ws and not self.upstream_ws.closed:
+                try:
+                    pong = await self.upstream_ws.ping()
+                    await asyncio.wait_for(pong, timeout=10)
+                    self.last_heartbeat = datetime.now()
+                    self.healthy = True
+                except:
+                    self.healthy = False
+                    await self._handle_reconnect()
+                    
+    async def _handle_reconnect(self):
+        """Handle reconnection logic"""
+        if self.reconnect_attempts < self.max_reconnect_attempts:
+            self.reconnect_attempts += 1
+            backoff = min(30, 2 ** self.reconnect_attempts)
+            logger.info(f"Attempting reconnect in {backoff} seconds...")
+            await asyncio.sleep(backoff)
+            await self.connect_upstream()
+        else:
+            logger.error("Max reconnection attempts reached")
+            
+    async def _process_queue(self):
+        """Process queued messages"""
+        while True:
+            message = await self.message_queue.get()
+            if self.healthy and self.upstream_ws:
+                try:
+                    await self.upstream_ws.send(json.dumps(message))
+                except Exception as e:
+                    logger.error(f"Failed to send message: {e}")
+                    await self.message_queue.put(message)
+                    self.healthy = False
+                    await self._handle_reconnect()
 
     async def close(self):
         if self.upstream_ws:
@@ -462,8 +593,29 @@ def fastapi_app():
     """ASGI app for handling WebSocket connections"""
     # Ensure database directory exists
     os.makedirs(os.path.dirname(DATABASE_URL), exist_ok=True)
+    
     # Initialize database tables
     init_db()
+    
+    # Start metrics server
+    start_http_server(8000)
+    
+    # Initialize connection pool
+    global connection_pool
+    connection_pool = ConnectionPool()
+    
+    # Add health check endpoint
+    @web_app.get("/health")
+    async def health_check():
+        """Health check endpoint"""
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "version": "1.0.0",
+            "connections": len(connection_pool.pool),
+            "queue_size": connection_pool.queue.qsize()
+        }
+    
     return web_app
 
 if __name__ == "__main__":
