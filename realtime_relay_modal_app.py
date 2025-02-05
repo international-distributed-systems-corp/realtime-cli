@@ -44,10 +44,54 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Metrics
-WEBSOCKET_CONNECTIONS = Counter('websocket_connections_total', 'Total WebSocket connections')
-WEBSOCKET_MESSAGES = Counter('websocket_messages_total', 'Total WebSocket messages')
-MESSAGE_PROCESSING_TIME = Histogram('message_processing_seconds', 'Time spent processing messages')
+# Simple in-memory monitoring
+class ServiceMonitor:
+    """Simple in-memory service monitoring"""
+    def __init__(self):
+        self.metrics = {
+            'websocket_connections': 0,
+            'websocket_messages': 0,
+            'processing_times': [],
+            'errors': [],
+            'last_updated': datetime.now()
+        }
+    
+    def increment(self, metric: str):
+        if metric in self.metrics:
+            if isinstance(self.metrics[metric], int):
+                self.metrics[metric] += 1
+        self.metrics['last_updated'] = datetime.now()
+    
+    def decrement(self, metric: str):
+        if metric in self.metrics:
+            if isinstance(self.metrics[metric], int):
+                self.metrics[metric] = max(0, self.metrics[metric] - 1)
+        self.metrics['last_updated'] = datetime.now()
+    
+    def add_timing(self, seconds: float):
+        self.metrics['processing_times'].append(seconds)
+        # Keep only last 1000 timings
+        self.metrics['processing_times'] = self.metrics['processing_times'][-1000:]
+        self.metrics['last_updated'] = datetime.now()
+    
+    def add_error(self, error: str):
+        self.metrics['errors'].append({
+            'error': error,
+            'timestamp': datetime.now()
+        })
+        # Keep only last 100 errors
+        self.metrics['errors'] = self.metrics['errors'][-100:]
+        self.metrics['last_updated'] = datetime.now()
+    
+    def get_stats(self) -> dict:
+        stats = self.metrics.copy()
+        if self.metrics['processing_times']:
+            stats['avg_processing_time'] = sum(self.metrics['processing_times']) / len(self.metrics['processing_times'])
+        else:
+            stats['avg_processing_time'] = 0
+        return stats
+
+monitor = ServiceMonitor()
 
 # Rate limiting
 RATE_LIMIT = 100  # requests per minute
@@ -509,6 +553,7 @@ async def websocket_endpoint(websocket: WebSocket):
     relay = None
     try:
         await manager.connect(websocket)
+        monitor.increment('websocket_connections')
         logger.info("New WebSocket connection accepted")
 
         # Send connection acknowledgment
@@ -554,6 +599,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info("Client disconnected normally")
+        monitor.decrement('websocket_connections')
     except Exception as e:
         logger.error(f"WebSocket error: {str(e)}")
     finally:
@@ -597,23 +643,31 @@ def fastapi_app():
     # Initialize database tables
     init_db()
     
-    # Start metrics server
-    start_http_server(8000)
-    
-    # Initialize connection pool
+    # Initialize connection pool and monitoring
     global connection_pool
     connection_pool = ConnectionPool()
     
-    # Add health check endpoint
+    # Add monitoring endpoints
+    @web_app.get("/metrics")
+    async def get_metrics():
+        """Get current service metrics"""
+        return monitor.get_stats()
+    
     @web_app.get("/health")
     async def health_check():
         """Health check endpoint"""
+        stats = monitor.get_stats()
         return {
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
             "version": "1.0.0",
             "connections": len(connection_pool.pool),
-            "queue_size": connection_pool.queue.qsize()
+            "queue_size": connection_pool.queue.qsize(),
+            "websocket_stats": {
+                "connections": stats["websocket_connections"],
+                "messages": stats["websocket_messages"],
+                "avg_processing_time": stats["avg_processing_time"]
+            }
         }
     
     return web_app
