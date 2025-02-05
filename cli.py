@@ -9,6 +9,8 @@ import uuid
 import pyaudio
 import logging
 import base64
+import requests
+from getpass import getpass
 from queue import Queue, Empty
 from typing import Optional
 from enum import Enum, auto
@@ -43,8 +45,23 @@ class SessionState:
         self.audio = AudioState()
 
 # Environment URLs  
-PROD_URL = "wss://arthurcolle--realtime-relay.modal.run/ws"
-DEV_URL = "wss://arthurcolle--realtime-relay-dev.modal.run/ws"
+PROD_URL = "wss://arthurcolle--realtime-relay.modal.run"
+DEV_URL = "wss://arthurcolle--realtime-relay-dev.modal.run"
+
+async def login(base_url: str) -> str:
+    """Login and get access token"""
+    email = input("Email: ")
+    password = getpass("Password: ")
+    
+    response = requests.post(
+        f"{base_url}/token",
+        data={"username": email, "password": password}
+    )
+    
+    if response.status_code != 200:
+        raise Exception(f"Login failed: {response.text}")
+        
+    return response.json()["access_token"]
 
 # Audio settings
 CHUNK = 1024
@@ -200,9 +217,15 @@ async def start_realtime_session(env: str = 'prod'):
     print(f"Connecting to {relay_url}...")
     
     try:
+        # Get authentication token
+        token = await login(relay_url)
+        
         async with websockets.connect(
-            relay_url,
-            additional_headers={"Content-Type": "application/json"}
+            f"{relay_url}/ws",
+            additional_headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}"
+            }
         ) as ws:
             # Wait for connection
             msg_str = await ws.recv()
@@ -253,8 +276,35 @@ async def start_realtime_session(env: str = 'prod'):
         if STATE.audio.player:
             STATE.audio.player.stop()
 
+async def register(base_url: str):
+    """Register a new user"""
+    email = input("Email: ")
+    password = getpass("Password: ")
+    
+    response = requests.post(
+        f"{base_url}/register",
+        json={"email": email, "password": password}
+    )
+    
+    if response.status_code != 200:
+        raise Exception(f"Registration failed: {response.text}")
+    print("Registration successful! Please login.")
+
 if __name__ == "__main__":
     try:
-        asyncio.run(start_realtime_session())
+        import argparse
+        parser = argparse.ArgumentParser(description='Realtime CLI')
+        parser.add_argument('--env', choices=['prod', 'dev'], default='prod',
+                          help='Environment to connect to')
+        parser.add_argument('--register', action='store_true',
+                          help='Register a new user')
+        args = parser.parse_args()
+        
+        base_url = PROD_URL if args.env == 'prod' else DEV_URL
+        
+        if args.register:
+            asyncio.run(register(base_url))
+        else:
+            asyncio.run(start_realtime_session(args.env))
     except KeyboardInterrupt:
         print("\nSession ended.")
