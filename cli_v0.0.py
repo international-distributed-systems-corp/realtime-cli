@@ -18,18 +18,6 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 from queue import Queue, Empty
 
-from tools import ToolCollection, ComputerTool, BashTool, EditTool, GPT4ProxyTool
-
-# Initialize tool collections
-claude_tools = ToolCollection(
-    ComputerTool(),
-    BashTool(),
-    EditTool(),
-)
-
-gpt4_tools = ToolCollection(
-    GPT4ProxyTool(claude_tools)
-)
 
 from utils import (
     console,
@@ -210,9 +198,8 @@ class AudioManager:
         self.stop_playback()
         self.p.terminate()
 
-# Environment URLs
-PROD_URL = "wss://arthurcolle--realtime-relay.modal.run/ws"
-DEV_URL = "wss://arthurcolle--realtime-relay-dev.modal.run/ws"
+# Local server URL
+SERVER_URL = "ws://localhost:9000"
 
 # Configuration
 AUDIO_CHUNK = 1024
@@ -227,28 +214,11 @@ STATE.audio.player = None  # Initialize player attribute
 
 # Enhanced session config
 DEFAULT_SESSION_CONFIG = {
-    "model": "gpt-4o-realtime-preview-2024-12-17",
+    "model": "claude-3-sonnet-20240229",
     "modalities": ["text", "audio"],
-    "instructions": """You are ATLAS-7, a highly disciplined military AI assistant working in tandem with Claude to control this computer.
-You communicate with precision and efficiency, maintaining a formal and professional demeanor at all times.
-You value clarity, accuracy, and direct communication.
-
-Your role is to:
-1. Process user voice input and determine the high-level intent
-2. Delegate computer control tasks to Claude by sending clear text instructions
-3. Handle the voice conversation with the user while Claude executes the tasks
-4. Provide status updates and confirmations to the user about Claude's actions
-
-Example interaction:
-User: "Can you help me find a document about neural networks?"
-You: "Affirmative. I'll coordinate with Claude to search for neural network documentation. Claude, please search the filesystem for documents containing 'neural network' and provide a summary of what you find."
-[Claude uses tools to search and respond]
-You: "I've directed Claude to search for relevant documents. Stand by for results."
-
-Remember:
-- You don't have direct computer control - delegate those tasks to Claude
-- Keep the user informed about what Claude is doing
-- Maintain military precision in your communication""",
+    "instructions": """You are a helpful AI assistant.
+You can engage in natural conversation and help users with various tasks.
+Be friendly, clear, and concise in your responses.""",
     "voice": "verse",
     "input_audio_format": "pcm16",  # 24kHz, mono, 16-bit PCM, little-endian
     "output_audio_format": "pcm16",  # 24kHz sample rate
@@ -262,25 +232,7 @@ Remember:
         "silence_duration_ms": 500,
         "create_response": True
     },
-    "tools": [
-        {
-            "type": "function",
-            "name": "delegate_to_claude",
-            "description": "Delegate computer control tasks to Claude, who has direct access to the computer tools",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "instruction": {
-                        "type": "string",
-                        "description": "The instruction to send to Claude"
-                    }
-                },
-                "required": [
-                    "instruction"
-                ]
-            }
-        }
-    ],
+    "tools": [],
     "tool_choice": "auto"
 }
 
@@ -457,14 +409,7 @@ async def handle_server_events(ws):
 
 async def main():
     """Main entry point"""
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='OpenAI Realtime API CLI')
-    parser.add_argument('--env', choices=['prod', 'dev'], default='prod',
-                       help='Environment to connect to (prod or dev)')
-    args = parser.parse_args()
-    
-    # Select URL based on environment
-    relay_url = PROD_URL if args.env == 'prod' else DEV_URL
+    relay_url = SERVER_URL
     
     try:
         print(f"Connecting to relay at {relay_url} ...")
