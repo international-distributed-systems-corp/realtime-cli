@@ -343,20 +343,7 @@ async def handle_server_events(ws):
                         print(event["delta"], end='', flush=True)
 
                 elif event_type == "tool_use":
-                    print(f"\nUsing tool: {event['name']}")
-                    result = await gpt4_tools.run(
-                        name=event['name'],
-                        tool_input=event['input']
-                    )
-                    if result.output:
-                        print(f"> Tool Output: {result.output}")
-                    if result.error:
-                        print(f"!!! Tool Error: {result.error}")
-                    if result.base64_image:
-                        os.makedirs("screenshots", exist_ok=True)
-                        with open(f"screenshots/screenshot_{event['id']}.png", "wb") as f:
-                            f.write(base64.b64decode(result.base64_image))
-                        print(f"Took screenshot screenshot_{event['id']}.png")
+                    print(f"\nTool use not supported in local relay mode")
 
                 elif event_type == "response.audio_transcript.delta":
                     if (STATE.response_state == ResponseState.RESPONDING and 
