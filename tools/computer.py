@@ -1,12 +1,20 @@
 import asyncio
 import base64
 import io
+import os
 from enum import StrEnum
 from typing import Literal, TypedDict
-import pyautogui
 from anthropic.types.beta import BetaToolComputerUse20241022Param
 
 from .base import BaseAnthropicTool, ToolError, ToolResult
+
+# Conditionally import pyautogui to handle headless environments
+try:
+    import pyautogui
+    PYAUTOGUI_AVAILABLE = True
+except Exception:
+    PYAUTOGUI_AVAILABLE = False
+    pyautogui = None
 
 OUTPUT_DIR = "/tmp/outputs"
 
@@ -70,6 +78,9 @@ class ComputerTool(BaseAnthropicTool):
 
     def __init__(self):
         super().__init__()
+
+        if not PYAUTOGUI_AVAILABLE:
+            raise ToolError("ComputerTool requires a display environment and cannot be used in headless mode")
 
         self.width = int(pyautogui.size()[0])
         self.height = int(pyautogui.size()[1])

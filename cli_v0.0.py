@@ -192,14 +192,14 @@ class AudioManager:
             self.output_stream = None
         logger.info("Playback stopped")
         
-    def cleanup(self):
+    def cleanup(self):  
         """Clean up all audio resources"""
         self.stop_recording()
         self.stop_playback()
         self.p.terminate()
 
 # Local server URL
-SERVER_URL = "ws://localhost:9000"
+SERVER_URL = "wss://arthurcolle--realtime-relay.modal.run/ws"
 
 # Configuration
 AUDIO_CHUNK = 1024
@@ -214,7 +214,7 @@ STATE.audio.player = None  # Initialize player attribute
 
 # Enhanced session config
 DEFAULT_SESSION_CONFIG = {
-    "model": "claude-3-sonnet-20240229",
+    "model": "gpt-4o-realtime-preview-2025-06-03",
     "modalities": ["text", "audio"],
     "instructions": """You are a helpful AI assistant.
 You can engage in natural conversation and help users with various tasks.

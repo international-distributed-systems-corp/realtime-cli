@@ -104,7 +104,7 @@ class _BashSession:
         self._process.stdout._buffer.clear()  # pyright: ignore[reportAttributeAccessIssue]
         self._process.stderr._buffer.clear()  # pyright: ignore[reportAttributeAccessIssue]
 
-        return CLIResult(output=output, error=error)
+        return ToolResult(output=output, error=error)
 
 
 class BashTool(BaseAnthropicTool):
